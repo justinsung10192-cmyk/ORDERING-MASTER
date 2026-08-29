@@ -24,7 +24,7 @@ const state = {
   orderDrafts: {},
   editingOrderId: '',
   operationPending: false,
-  admin: { tab: 'dashboard', dashboard: null, selectedDate: toDateInput(new Date()), catalog: null, users: [], scanResult: null, scanError: '' },
+  admin: { tab: 'dashboard', dashboard: null, selectedDate: toDateInput(new Date()), catalog: null, users: [], scanResult: null, scanError: '', orderFilter: 'all', orderQuery: '' },
   developerUsers: [],
   developerCodes: [],
   developerSettings: null,
@@ -32,7 +32,9 @@ const state = {
   scanner: null,
   scannerMode: '',
   scannerProcessing: false,
-  confirmAction: null
+  confirmAction: null,
+  countdownTimer: null,
+  closedSessionIds: new Set()
 };
 
 const ICONS = {
@@ -48,6 +50,7 @@ window.addEventListener('popstate', bootstrap);
 bootstrap();
 
 async function bootstrap() {
+  state.countdownTimer = setInterval(updateLunchCountdowns, 1000);
   state.publicConfig = await loadPublicConfig();
   const resetToken = new URLSearchParams(location.search).get('resetToken');
   if (resetToken) {
@@ -298,7 +301,7 @@ function renderExistingOrder(session) {
   const pickup = pickupBadge(order.pickupStatus);
   const items = order.items?.length ? order.items : [{ itemName: order.itemName, quantity: order.quantity || 1, selectedOptions: order.selectedOptions || [] }];
   const editable = orderCanBeChanged(session, order);
-  return `<article class="binder-edge overflow-hidden rounded-[1.5rem] bg-white px-7 py-6 shadow-paper ring-1 ring-ledger/5"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">ORDER RECORDED</p><div class="mt-2 flex items-start justify-between gap-3"><div><h2 class="font-serif text-xl font-black">已完成訂餐</h2><p class="mt-1 text-sm text-slate-500">${escapeHtml(session.storeName)} · ${formatDate(session.orderDate)} · 共 ${order.quantity || items.reduce((sum, item) => sum + Number(item.quantity || 1), 0)} 份</p></div><b class="text-xl text-ledger tabular-nums">${money(order.totalPrice)}</b></div><div class="mt-4 space-y-2">${items.map(item => `<div class="rounded-xl bg-mist px-3 py-2.5"><p class="text-sm font-black text-ledger">${escapeHtml(item.itemName)}${Number(item.quantity || 1) > 1 ? ` × ${Number(item.quantity)}` : ''}</p>${item.selectedOptions?.length ? `<p class="mt-1 text-xs text-slate-500">${item.selectedOptions.map(option => `${escapeHtml(option.name)} ${signedMoney(option.priceAdjustment)}`).join('、')}</p>` : ''}</div>`).join('')}</div>${order.outstandingAmount > 0 ? `<p class="mt-3 rounded-xl bg-[#FFF8EC] px-3 py-2 text-xs leading-5 text-[#805820]">尚有現金未繳：${money(order.outstandingAmount)}</p>` : ''}${order.note ? `<p class="mt-3 rounded-xl bg-[#FFF8EC] px-3 py-2 text-xs leading-5 text-[#805820]">備註：${escapeHtml(order.note)}</p>` : ''}<div class="mt-5 flex gap-2">${payment}${pickup}</div>${editable ? `<div class="mt-5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4"><button data-action="edit-own-order" data-session-id="${session.sessionId}" data-order-id="${order.orderId}" class="rounded-xl bg-ledger px-3 py-3 text-sm font-bold text-white">修改訂單</button><button data-action="delete-own-order" data-order-id="${order.orderId}" class="rounded-xl bg-red-50 px-3 py-3 text-sm font-bold text-red-700">取消訂單</button></div><p class="mt-3 text-xs leading-5 text-slate-500">截止前可調整餐點、數量與備註，或取消本場次訂單。</p>` : `<p class="mt-5 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">此訂單已截止、已取餐或已現金結清，不能再自行修改。</p>`}</article>`;
+  return `<article class="binder-edge overflow-hidden rounded-[1.5rem] bg-white px-7 py-6 shadow-paper ring-1 ring-ledger/5"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">ORDER RECORDED</p><div class="mt-2 flex items-start justify-between gap-3"><div><h2 class="font-serif text-xl font-black">已完成訂餐</h2><p class="mt-1 text-sm text-slate-500">${escapeHtml(session.storeName)} · ${formatDate(session.orderDate)} · 共 ${order.quantity || items.reduce((sum, item) => sum + Number(item.quantity || 1), 0)} 份</p></div><b class="text-xl text-ledger tabular-nums">${money(order.totalPrice)}</b></div><div class="mt-4 space-y-2">${items.map(item => `<div class="rounded-xl bg-mist px-3 py-2.5"><p class="text-sm font-black text-ledger">${escapeHtml(item.itemName)}${Number(item.quantity || 1) > 1 ? ` × ${Number(item.quantity)}` : ''}</p>${item.selectedOptions?.length ? `<p class="mt-1 text-xs text-slate-500">${item.selectedOptions.map(option => `${escapeHtml(option.name)} ${signedMoney(option.priceAdjustment)}`).join('、')}</p>` : ''}</div>`).join('')}</div>${order.outstandingAmount > 0 ? `<p class="mt-3 rounded-xl bg-[#FFF8EC] px-3 py-2 text-xs leading-5 text-[#805820]">尚有現金未繳：${money(order.outstandingAmount)}</p>` : ''}${order.note ? `<p class="mt-3 rounded-xl bg-[#FFF8EC] px-3 py-2 text-xs leading-5 text-[#805820]">備註：${escapeHtml(order.note)}</p>` : ''}<div class="mt-5 flex gap-2">${payment}${pickup}</div><div class="mt-4"><button data-action="copy-my-order" data-session-id="${session.sessionId}" class="w-full rounded-xl bg-mist px-3 py-3 text-sm font-bold text-ledger">複製訂單文字（分享給家人）</button></div>${editable ? `<div class="mt-5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4"><button data-action="edit-own-order" data-session-id="${session.sessionId}" data-order-id="${order.orderId}" class="rounded-xl bg-ledger px-3 py-3 text-sm font-bold text-white">修改訂單</button><button data-action="delete-own-order" data-order-id="${order.orderId}" class="rounded-xl bg-red-50 px-3 py-3 text-sm font-bold text-red-700">取消訂單</button></div><p class="mt-3 text-xs leading-5 text-slate-500">截止前可調整餐點、數量與備註，或取消本場次訂單。</p>` : `<p class="mt-5 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">此訂單已截止、已取餐或已現金結清，不能再自行修改。</p>`}</article>`;
 }
 
 function renderOrderForm(session) {
@@ -321,7 +324,13 @@ function renderMultiOrderForm(session) {
   if (!items.length) return emptyState('本場次尚未設定餐點', '請通知管理員在店家菜單中新增項目。');
   let summary = { total: 0, totalQuantity: 0, items: [] };
   try { if (draft.items.length) summary = summarizeCart(items, draft.items); } catch (_) { state.orderDrafts[session.sessionId] = { items: [], note: draft.note || '' }; }
-  return `<form id="order-form" data-session-id="${session.sessionId}" data-order-id="${editing ? state.editingOrderId : ''}" class="space-y-4"><article class="binder-edge overflow-hidden rounded-[1.5rem] bg-white px-7 py-6 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.13em] text-slate-500">${editing ? 'EDIT ORDER' : escapeHtml(session.storeName)}</p><h2 class="mt-1 font-serif text-xl font-black">${editing ? '修改本場次訂單' : `${formatDate(session.orderDate)} 的午餐`}</h2></div><span class="rounded-lg bg-[#FFF6E8] px-2.5 py-1.5 text-[10px] font-bold text-[#885A1C]">${session.paymentMode === 'Stored-value Only' ? '僅限儲值金' : '混合支付'}</span></div><p class="mt-3 border-l-2 border-apricot pl-3 text-xs leading-5 text-slate-500">可同時勾選多種餐點，並個別設定數量與客製選項。截止：<b class="text-ledger">${formatDateTime(session.cutoffTime)}</b></p></article><article class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-end justify-between"><h3 class="font-serif text-lg font-black">選擇餐點</h3><p class="text-xs text-slate-500">可複選、每項最多 99 份</p></div><div class="mt-4 space-y-4">${items.map(item => { const line = draft.items.find(entry => entry.itemId === item.itemId); const selected = !!line; return `<div class="overflow-hidden rounded-2xl border ${selected ? 'border-ledger bg-mist/60' : 'border-slate-100 bg-white'}"><label class="flex cursor-pointer items-center justify-between gap-3 p-4"><span class="flex items-center gap-3"><input data-cart-item="${item.itemId}" class="h-5 w-5 rounded accent-ledger" type="checkbox" ${selected ? 'checked' : ''}/><span><span class="block text-sm font-bold">${escapeHtml(item.name)}</span><span class="mt-0.5 block text-xs text-slate-500">可選客製項目</span></span></span><b class="shrink-0 text-sm tabular-nums text-ledger">${money(item.basePrice)}</b></label>${selected ? `<div class="border-t border-ledger/10 px-4 pb-4 pt-3"><div class="flex items-center justify-between"><p class="text-xs font-bold text-slate-600">數量</p><div class="flex items-center gap-2 rounded-xl bg-white p-1 ring-1 ring-ledger/10"><button data-action="adjust-cart-quantity" data-item-id="${item.itemId}" data-delta="-1" ${line.quantity <= 1 ? 'disabled' : ''} type="button" class="grid h-8 w-8 place-items-center rounded-lg bg-mist font-black text-ledger disabled:opacity-35">−</button><b class="w-7 text-center text-sm tabular-nums text-ledger">${line.quantity}</b><button data-action="adjust-cart-quantity" data-item-id="${item.itemId}" data-delta="1" ${line.quantity >= 99 ? 'disabled' : ''} type="button" class="grid h-8 w-8 place-items-center rounded-lg bg-ledger font-black text-white disabled:opacity-35">＋</button></div></div><div class="mt-4 space-y-2">${item.options.length ? item.options.map(option => `<label class="flex cursor-pointer items-center justify-between rounded-xl bg-white px-3 py-2.5 ring-1 ring-ledger/5"><span class="flex items-center gap-2"><input data-cart-option="${option.optionId}" data-item-id="${item.itemId}" type="checkbox" class="h-4 w-4 rounded accent-ledger" ${line.optionIds.includes(option.optionId) ? 'checked' : ''}/><span class="text-sm">${escapeHtml(option.name)}</span></span><b class="text-xs tabular-nums ${option.priceAdjustment > 0 ? 'text-apricot' : 'text-stamp'}">${signedMoney(option.priceAdjustment)}</b></label>`).join('') : '<p class="rounded-xl bg-white px-3 py-2.5 text-xs text-slate-500">此餐點沒有額外選項。</p>'}</div><p class="mt-3 text-right text-sm font-black tabular-nums text-ledger">小計 ${money(summary.items.find(entry => entry.itemId === item.itemId)?.lineTotal || 0)}</p></div>` : ''}</div>`; }).join('')}</div><label class="mt-5 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">整筆訂單備註</span><textarea name="note" maxlength="200" rows="2" class="w-full resize-none rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger" placeholder="例如：請將全部餐點分開裝">${escapeHtml(draft.note || '')}</textarea></label></article><div class="sticky bottom-[68px] z-20 -mx-4 border-y border-ledger/10 bg-paper/95 px-4 py-3 backdrop-blur"><div class="flex items-center justify-between gap-3"><div><p class="text-[11px] font-bold text-slate-500">本次共 ${summary.totalQuantity} 份</p><p id="order-total" class="text-2xl font-black tabular-nums text-ledger">${money(summary.total)}</p></div><button type="submit" ${summary.totalQuantity ? '' : 'disabled'} class="rounded-xl bg-ledger px-5 py-3 text-sm font-bold text-white shadow-paper disabled:cursor-not-allowed disabled:opacity-40">${editing ? '儲存修改' : '確認送出'}</button></div></div></form>`;
+  const balanceAmount = Number(state.user.walletBalance) || 0;
+  const balanceShort = session.paymentMode === 'Stored-value Only' && !editing && summary.totalQuantity > 0 && summary.total > balanceAmount;
+  const balanceNote = session.paymentMode === 'Stored-value Only'
+    ? (summary.total > balanceAmount ? `<span class="ml-1 text-red-600">· 餘額不足 ${money(summary.total - balanceAmount)}</span>` : '')
+    : (summary.total > balanceAmount && summary.totalQuantity ? `<span class="ml-1 text-[#A45A13]">· 差額將記為現金未繳</span>` : '');
+  const canSubmit = summary.totalQuantity > 0 && !balanceShort;
+  return `<form id="order-form" data-session-id="${session.sessionId}" data-order-id="${editing ? state.editingOrderId : ''}" class="space-y-4"><article class="binder-edge overflow-hidden rounded-[1.5rem] bg-white px-7 py-6 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.13em] text-slate-500">${editing ? 'EDIT ORDER' : escapeHtml(session.storeName)}</p><h2 class="mt-1 font-serif text-xl font-black">${editing ? '修改本場次訂單' : `${formatDate(session.orderDate)} 的午餐`}</h2></div><span class="rounded-lg bg-[#FFF6E8] px-2.5 py-1.5 text-[10px] font-bold text-[#885A1C]">${session.paymentMode === 'Stored-value Only' ? '僅限儲值金' : '混合支付'}</span></div><p class="mt-3 border-l-2 border-apricot pl-3 text-xs leading-5 text-slate-500">可同時勾選多種餐點，並個別設定數量與客製選項。截止：<b class="text-ledger" data-countdown="${session.cutoffTime}" data-session-id="${session.sessionId}">${formatDateTime(session.cutoffTime)}</b></p></article>${renderFavoriteChips(items)}<article class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-end justify-between"><h3 class="font-serif text-lg font-black">選擇餐點</h3><p class="text-xs text-slate-500">可複選、每項最多 99 份</p></div><div class="mt-4 space-y-4">${items.map(item => { const line = draft.items.find(entry => entry.itemId === item.itemId); const selected = !!line; return `<div class="overflow-hidden rounded-2xl border ${selected ? 'border-ledger bg-mist/60' : 'border-slate-100 bg-white'}"><label class="flex cursor-pointer items-center justify-between gap-3 p-4"><span class="flex items-center gap-3"><input data-cart-item="${item.itemId}" class="h-5 w-5 rounded accent-ledger" type="checkbox" ${selected ? 'checked' : ''}/><span><span class="block text-sm font-bold">${escapeHtml(item.name)}</span><span class="mt-0.5 block text-xs text-slate-500">可選客製項目</span></span></span><b class="shrink-0 text-sm tabular-nums text-ledger">${money(item.basePrice)}</b></label>${selected ? `<div class="border-t border-ledger/10 px-4 pb-4 pt-3"><div class="flex items-center justify-between"><p class="text-xs font-bold text-slate-600">數量</p><div class="flex items-center gap-2 rounded-xl bg-white p-1 ring-1 ring-ledger/10"><button data-action="adjust-cart-quantity" data-item-id="${item.itemId}" data-delta="-1" ${line.quantity <= 1 ? 'disabled' : ''} type="button" class="grid h-8 w-8 place-items-center rounded-lg bg-mist font-black text-ledger disabled:opacity-35">−</button><b class="w-7 text-center text-sm tabular-nums text-ledger">${line.quantity}</b><button data-action="adjust-cart-quantity" data-item-id="${item.itemId}" data-delta="1" ${line.quantity >= 99 ? 'disabled' : ''} type="button" class="grid h-8 w-8 place-items-center rounded-lg bg-ledger font-black text-white disabled:opacity-35">＋</button></div></div><div class="mt-4 space-y-2">${item.options.length ? item.options.map(option => `<label class="flex cursor-pointer items-center justify-between rounded-xl bg-white px-3 py-2.5 ring-1 ring-ledger/5"><span class="flex items-center gap-2"><input data-cart-option="${option.optionId}" data-item-id="${item.itemId}" type="checkbox" class="h-4 w-4 rounded accent-ledger" ${line.optionIds.includes(option.optionId) ? 'checked' : ''}/><span class="text-sm">${escapeHtml(option.name)}</span></span><b class="text-xs tabular-nums ${option.priceAdjustment > 0 ? 'text-apricot' : 'text-stamp'}">${signedMoney(option.priceAdjustment)}</b></label>`).join('') : '<p class="rounded-xl bg-white px-3 py-2.5 text-xs text-slate-500">此餐點沒有額外選項。</p>'}</div><p class="mt-3 text-right text-sm font-black tabular-nums text-ledger">小計 ${money(summary.items.find(entry => entry.itemId === item.itemId)?.lineTotal || 0)}</p></div>` : ''}</div>`; }).join('')}</div><label class="mt-5 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">整筆訂單備註</span><textarea name="note" maxlength="200" rows="2" class="w-full resize-none rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger" placeholder="例如：請將全部餐點分開裝">${escapeHtml(draft.note || '')}</textarea></label></article><div class="sticky bottom-[68px] z-20 -mx-4 border-y border-ledger/10 bg-paper/95 px-4 py-3 backdrop-blur"><div class="flex items-center justify-between gap-3"><div><p class="text-[11px] font-bold text-slate-500">本次共 ${summary.totalQuantity} 份</p><p id="order-total" class="text-2xl font-black tabular-nums text-ledger">${money(summary.total)}</p><p class="mt-0.5 text-[10px] font-bold ${balanceShort ? 'text-red-600' : 'text-slate-400'}">儲值餘額 ${money(balanceAmount)}${balanceNote}</p></div><button type="submit" ${canSubmit ? '' : 'disabled'} class="rounded-xl bg-ledger px-5 py-3 text-sm font-bold text-white shadow-paper disabled:cursor-not-allowed disabled:opacity-40">${editing ? '儲存修改' : '確認送出'}</button></div></div></form>`;
 }
 
 function setCartItemSelected(sessionId, itemId, selected) {
@@ -442,7 +451,8 @@ function renderDashboardData() {
   const d = state.admin.dashboard;
   if (!root || !d) return;
   const cards = [['總份數', d.stats.totalMeals, '份'], ['總應收', money(d.stats.totalReceivable), ''], ['未結清', d.stats.unpaidStudents, '人'], ['已取餐', d.stats.pickedUp, '份']];
-  root.innerHTML = `<div class="grid grid-cols-2 gap-3">${cards.map(([label, value, unit], index) => `<div class="rounded-2xl ${index === 1 ? 'bg-apricot text-white' : index === 3 ? 'bg-stamp text-white' : 'bg-white text-ledger'} p-4 shadow-paper"><p class="text-[11px] font-bold ${index === 1 || index === 3 ? 'text-white/75' : 'text-slate-500'}">${label}</p><p class="mt-1 font-serif text-2xl font-black tabular-nums">${value}<span class="ml-1 text-xs">${unit}</span></p></div>`).join('')}</div><div class="mt-4 flex gap-2"><button data-action="copy-order-text" class="flex-1 rounded-xl bg-white px-3 py-3 text-xs font-bold text-ledger shadow-sm ring-1 ring-ledger/5">複製電話訂餐格式</button><button data-action="export-csv" class="flex-1 rounded-xl bg-ledger px-3 py-3 text-xs font-bold text-white shadow-paper">匯出 CSV</button></div><section class="mt-5"><h2 class="mb-3 font-serif text-lg font-black">當日訂單</h2><div class="space-y-2">${d.orders.length ? d.orders.map(order => `<article class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-sm font-black">${escapeHtml(order.seatNo)}號 ${escapeHtml(order.studentName)} <span class="font-normal text-slate-500">${escapeHtml(order.studentNo)}</span></p><p class="mt-1 text-sm text-ledger">${escapeHtml(order.itemName)}${order.selectedOptions.length ? ` · ${order.selectedOptions.map(x => escapeHtml(x.name)).join('、')}` : ''}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(order.storeName)}${order.note ? ` · 備註：${escapeHtml(order.note)}` : ''}</p></div><div class="text-right"><b class="block text-sm tabular-nums text-ledger">${money(order.totalPrice)}</b><div class="mt-2 flex flex-wrap justify-end gap-1">${paymentBadge(order.paymentStatus)}${pickupBadge(order.pickupStatus)}</div></div></div></article>`).join('') : emptyState('這一天還沒有訂單', '選擇其他日期或在場次開放後再查看。')}</div></section>`;
+  root.innerHTML = `<div class="grid grid-cols-2 gap-3">${cards.map(([label, value, unit], index) => `<div class="rounded-2xl ${index === 1 ? 'bg-apricot text-white' : index === 3 ? 'bg-stamp text-white' : 'bg-white text-ledger'} p-4 shadow-paper"><p class="text-[11px] font-bold ${index === 1 || index === 3 ? 'text-white/75' : 'text-slate-500'}">${label}</p><p class="mt-1 font-serif text-2xl font-black tabular-nums">${value}<span class="ml-1 text-xs">${unit}</span></p></div>`).join('')}</div><div class="mt-4 flex gap-2"><button data-action="copy-order-text" class="flex-1 rounded-xl bg-white px-3 py-3 text-xs font-bold text-ledger shadow-sm ring-1 ring-ledger/5">複製電話訂餐格式</button><button data-action="export-csv" class="flex-1 rounded-xl bg-ledger px-3 py-3 text-xs font-bold text-white shadow-paper">匯出 CSV</button></div><section class="mt-5"><div class="flex items-center justify-between gap-2"><h2 class="font-serif text-lg font-black">當日訂單</h2><input id="order-search" type="search" value="${escapeAttr(state.admin.orderQuery)}" placeholder="搜尋姓名／座號／餐點" class="w-36 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ledger"/></div><div class="mt-2 flex gap-1.5">${[['all','全部'],['unpicked','待取餐'],['unpaid','未繳'],['picked','已取餐'],['paid','已結清']].map(([value,label]) => `<button type="button" data-action="admin-filter" data-filter="${value}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-bold ${state.admin.orderFilter === value ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">${label}</button>`).join('')}</div><div id="dashboard-orders" class="mt-3 space-y-2"></div></section>`;
+  renderDashboardOrderList();
   root.insertAdjacentHTML('beforeend', renderSessionSummaryTables(d.sessionSummaries || []));
 }
 
@@ -562,6 +572,10 @@ async function onClick(event) {
   if (!action) return;
   const run = async () => {
     if (action === 'select-session') { state.selectedSessionId = button.dataset.id; state.selectedItemId = ''; renderLunch(); return; }
+    if (action === 'quick-add-favorite') { quickAddFavorite(state.selectedSessionId, button.dataset.itemId, (button.dataset.optionIds || '').split(',').filter(Boolean)); renderLunch(); return; }
+    if (action === 'clear-favorites') { localStorage.removeItem('classLunch.favorites'); toast('已清空常點清單。', 'success'); renderLunch(); return; }
+    if (action === 'copy-my-order') return copyMyOrder(button.dataset.sessionId);
+    if (action === 'admin-filter') { state.admin.orderFilter = button.dataset.filter || 'all'; renderDashboardOrderList(); return; }
     if (action === 'adjust-cart-quantity') { adjustCartQuantity(state.selectedSessionId, button.dataset.itemId, button.dataset.delta); renderLunch(); return; }
     if (action === 'verify-type') { state.verification.type = button.dataset.type; renderVerification(); return; }
     if (action === 'refresh-verification') return generateVerification();
@@ -631,6 +645,7 @@ function onChange(event) {
 }
 
 function onInput(event) {
+  if (event.target.id === 'order-search') { state.admin.orderQuery = event.target.value; renderDashboardOrderList(); return; }
   if (event.target.matches('#order-form textarea[name="note"]')) {
     const session = state.sessions.find(item => item.sessionId === state.selectedSessionId);
     if (session) getOrderDraft(session).note = event.target.value.slice(0, 200);
@@ -710,7 +725,7 @@ async function submitOrder(form) {
   let summary;
   try { summary = summarizeCart(session.menuItems, draft.items); } catch (error) { return toast(error.message, 'error'); }
   const action = orderId ? 'updateOwnOrder' : 'placeOrder';
-  openConfirmModal({ eyebrow: orderId ? 'ORDER EDIT REVIEW' : '送出前核對', title: orderId ? '確認儲存訂單修改？' : `確認 ${formatDate(session.orderDate)} 的訂餐？`, body: `<div class="space-y-2 rounded-xl bg-mist p-3">${summary.items.map(item => `<div class="flex justify-between gap-3"><span><b>${escapeHtml(item.itemName)}</b>${item.quantity > 1 ? ` × ${item.quantity}` : ''}</span><b class="tabular-nums text-ledger">${money(item.lineTotal)}</b></div>`).join('')}</div><p class="mt-3 text-xs">共 ${summary.totalQuantity} 份，總額 ${money(summary.total)}。${orderId ? '系統會依更新後金額重新核對儲值餘額與未繳金額。' : '混合模式餘額不足時，未付部分會列為現金未繳。'}</p>`, submitLabel: orderId ? '確認儲存修改' : '確認送出', onConfirm: async () => { const result = await api(action, { ...(orderId ? { orderId } : { sessionId: form.dataset.sessionId }), items: summary.items.map(item => ({ itemId: item.itemId, quantity: item.quantity, optionIds: item.optionIds })), note }); if (result.walletBalance !== undefined) { state.user.walletBalance = result.walletBalance; syncUser(); } delete state.orderDrafts[form.dataset.sessionId]; state.editingOrderId = ''; closeModal(); toast(orderId ? '訂單已更新。' : '訂餐已送出並完成記錄。', 'success'); await refreshOrders(); } });
+  openConfirmModal({ eyebrow: orderId ? 'ORDER EDIT REVIEW' : '送出前核對', title: orderId ? '確認儲存訂單修改？' : `確認 ${formatDate(session.orderDate)} 的訂餐？`, body: `<div class="space-y-2 rounded-xl bg-mist p-3">${summary.items.map(item => `<div class="flex justify-between gap-3"><span><b>${escapeHtml(item.itemName)}</b>${item.quantity > 1 ? ` × ${item.quantity}` : ''}</span><b class="tabular-nums text-ledger">${money(item.lineTotal)}</b></div>`).join('')}</div><p class="mt-3 text-xs">共 ${summary.totalQuantity} 份，總額 ${money(summary.total)}。${orderId ? '系統會依更新後金額重新核對儲值餘額與未繳金額。' : '混合模式餘額不足時，未付部分會列為現金未繳。'}</p>`, submitLabel: orderId ? '確認儲存修改' : '確認送出', onConfirm: async () => { const result = await api(action, { ...(orderId ? { orderId } : { sessionId: form.dataset.sessionId }), items: summary.items.map(item => ({ itemId: item.itemId, quantity: item.quantity, optionIds: item.optionIds })), note }); if (result.walletBalance !== undefined) { state.user.walletBalance = result.walletBalance; syncUser(); } recordFavorites(summary.items); delete state.orderDrafts[form.dataset.sessionId]; state.editingOrderId = ''; closeModal(); toast(orderId ? '訂單已更新。' : '訂餐已送出並完成記錄。', 'success'); await refreshOrders(); } });
 }
 
 function startOwnOrderEdit(sessionId, orderId) {
@@ -900,6 +915,86 @@ function exportCsv() {
   const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })); link.download = `班級訂午餐_${d.date}.csv`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(link.href); toast('CSV 已開始下載。', 'success');
 }
 
+function readFavorites() { try { const value = JSON.parse(localStorage.getItem('classLunch.favorites') || '[]'); return Array.isArray(value) ? value : []; } catch (_) { return []; } }
+function saveFavorites(list) { try { localStorage.setItem('classLunch.favorites', JSON.stringify(list.slice(0, 12))); } catch (_) {} }
+function recordFavorites(items) {
+  const list = readFavorites();
+  (items || []).forEach(item => {
+    const key = String(item.itemId) + '|' + (item.optionIds || []).slice().sort().join(',');
+    const existing = list.find(favorite => (String(favorite.itemId) + '|' + (favorite.optionIds || []).slice().sort().join(',')) === key);
+    if (existing) { existing.count += 1; existing.lastAt = Date.now(); }
+    else list.push({ itemId: item.itemId, optionIds: (item.optionIds || []).slice(), count: 1, lastAt: Date.now() });
+  });
+  list.sort((a, b) => (b.count - a.count) || (b.lastAt - a.lastAt));
+  saveFavorites(list);
+}
+function quickAddFavorite(sessionId, itemId, optionIds) {
+  const draft = getOrderDraft({ sessionId });
+  if (!draft.items.some(entry => entry.itemId === itemId)) draft.items.push({ itemId, quantity: 1, optionIds: [] });
+  const entry = draft.items.find(selected => selected.itemId === itemId);
+  entry.optionIds = [...new Set([...(entry.optionIds || []), ...(optionIds || [])])];
+}
+function renderFavoriteChips(menuItems) {
+  const favorites = readFavorites().filter(favorite => menuItems.some(item => item.itemId === favorite.itemId)).slice(0, 5);
+  if (!favorites.length) return '';
+  const chips = favorites.map(favorite => {
+    const item = menuItems.find(candidate => candidate.itemId === favorite.itemId);
+    const options = (favorite.optionIds || []).map(id => (item.options || []).find(option => option.optionId === id)).filter(Boolean);
+    const label = `${escapeHtml(item.name)}${options.length ? '（' + options.map(option => escapeHtml(option.name)).join('、') + '）' : ''}`;
+    return `<button type="button" data-action="quick-add-favorite" data-item-id="${escapeAttr(favorite.itemId)}" data-option-ids="${escapeAttr((favorite.optionIds || []).join(','))}" class="rounded-xl border border-ledger/15 bg-mist/60 px-3 py-2 text-left text-xs font-bold text-ledger">${label}<span class="ml-1 text-[10px] font-normal text-slate-400">×${favorite.count}</span></button>`;
+  }).join('');
+  return `<article class="rounded-[1.5rem] bg-white p-4 shadow-paper ring-1 ring-ledger/5"><div class="flex items-center justify-between"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">常點的餐點</p><button type="button" data-action="clear-favorites" class="text-[10px] font-bold text-slate-400 underline underline-offset-4">清空</button></div><div class="mt-3 flex flex-wrap gap-2">${chips}</div><p class="mt-2 text-[10px] leading-4 text-slate-400">點一下直接加入購物車；只儲存在這台裝置。</p></article>`;
+}
+async function copyMyOrder(sessionId) {
+  const session = state.sessions.find(candidate => candidate.sessionId === sessionId);
+  const order = session?.existingOrder;
+  if (!order) return toast('找不到訂單資料。', 'error');
+  const items = (order.items || []).map(item => `${item.itemName}${Number(item.quantity || 1) > 1 ? `×${Number(item.quantity)}` : ''}${(item.selectedOptions || []).length ? `（${item.selectedOptions.map(option => option.name).join('、')}）` : ''}`).join('、');
+  const statusText = order.paymentStatus === 'PaidWallet' ? '' : order.paymentStatus === 'PaidCash' ? '，現金已結清' : order.paymentStatus === 'PartiallyPaid' ? '，部分抵扣' : '，現金未繳';
+  const text = `${formatDate(session.orderDate)}午餐：${items}｜合計 ${money(order.totalPrice)}${statusText}`;
+  try { await navigator.clipboard.writeText(text); toast('訂單文字已複製。', 'success'); }
+  catch (_) { toast('無法直接複製，請檢查瀏覽器權限。', 'error'); }
+}
+function updateLunchCountdowns() {
+  if (state.view !== 'lunch' || state.operationPending) return;
+  const now = Date.now();
+  let expiredFound = false;
+  $$('[data-countdown]').forEach(el => {
+    const cutoff = new Date(el.dataset.countdown).getTime();
+    if (!Number.isFinite(cutoff)) return;
+    const remaining = cutoff - now;
+    if (remaining <= 0) {
+      el.textContent = '已截止';
+      const sessionId = el.dataset.sessionId;
+      if (sessionId && !state.closedSessionIds.has(sessionId)) { state.closedSessionIds.add(sessionId); expiredFound = true; }
+    } else if (remaining < 60 * 60 * 1000) {
+      el.textContent = `剩 ${Math.floor(remaining / 60000)} 分 ${String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0')} 秒`;
+    } else {
+      el.textContent = `剩 ${Math.floor(remaining / 3600000)} 小時 ${Math.floor((remaining % 3600000) / 60000)} 分`;
+    }
+  });
+  if (expiredFound) refreshOrders().catch(() => {});
+}
+function filteredDashboardOrders() {
+  const d = state.admin.dashboard; if (!d) return [];
+  const query = String(state.admin.orderQuery || '').trim().toLowerCase();
+  return d.orders.filter(order => {
+    if (state.admin.orderFilter === 'unpicked' && order.pickupStatus === 'PickedUp') return false;
+    if (state.admin.orderFilter === 'picked' && order.pickupStatus !== 'PickedUp') return false;
+    if (state.admin.orderFilter === 'unpaid' && !(Number(order.outstandingAmount) > 0)) return false;
+    if (state.admin.orderFilter === 'paid' && Number(order.outstandingAmount) > 0) return false;
+    if (query && !`${order.seatNo} ${order.studentName} ${order.studentNo} ${order.itemName} ${order.storeName}`.toLowerCase().includes(query)) return false;
+    return true;
+  });
+}
+function renderDashboardOrderList() {
+  const root = $('#dashboard-orders'); if (!root) return;
+  const orders = filteredDashboardOrders();
+  root.innerHTML = orders.length ? orders.map(orderCard).join('') : emptyState('沒有符合條件的訂單', '試著調整篩選條件或搜尋關鍵字。');
+}
+function orderCard(order) {
+  return `<article class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-sm font-black">${escapeHtml(order.seatNo)}號 ${escapeHtml(order.studentName)} <span class="font-normal text-slate-500">${escapeHtml(order.studentNo)}</span></p><p class="mt-1 text-sm text-ledger">${escapeHtml(order.itemName)}${order.selectedOptions.length ? ` · ${order.selectedOptions.map(x => escapeHtml(x.name)).join('、')}` : ''}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(order.storeName)}${order.note ? ` · 備註：${escapeHtml(order.note)}` : ''}</p></div><div class="text-right"><b class="block text-sm tabular-nums text-ledger">${money(order.totalPrice)}</b><div class="mt-2 flex flex-wrap justify-end gap-1">${paymentBadge(order.paymentStatus)}${pickupBadge(order.pickupStatus)}</div></div></div></article>`;
+}
 async function api(action, data = {}, token = state.token, throwWhenUnconfigured = true) {
   if (!apiConfigured()) { if (throwWhenUnconfigured) throw new Error('尚未設定 Google Apps Script API 網址。'); return {}; }
   const response = await fetch(window.LUNCH_CONFIG.apiUrl, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, data, token }) });
