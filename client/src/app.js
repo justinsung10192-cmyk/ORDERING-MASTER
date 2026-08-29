@@ -767,11 +767,11 @@ function updateOrderTotal() {
 }
 
 async function refreshOrders() {
-  const data = await api('getOpenSessions');
+  // 效能：只呼叫一次 getBootstrap（已含 user、sessions 與 orders），省下原本額外的一次請求。
+  const data = await api('getBootstrap');
   state.sessions = data.sessions || [];
   state.orders = data.orders || [];
-  const bootstrapData = await api('getBootstrap');
-  state.user = bootstrapData.user;
+  state.user = data.user;
   syncUser();
   renderShell();
 }

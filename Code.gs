@@ -26,6 +26,14 @@ var SESSION_SECONDS = 21600; // 六小時；使用者可隨時重新登入。
 var VERIFY_MINUTES = 5;
 var RESET_MINUTES = 15;
 
+// 效能優化：資料列讀取快取。
+// SHEET_READ_CACHE：單一請求內的記憶體去重快取（同一個請求最多讀每張工作表一次）。
+// CacheService（ScriptCache）：跨請求的短期快取（SHEET_CACHE_TTL_SECONDS 秒）。
+// 任何寫入（appendRow / updateRow / deleteRowsWhere）都會立即 invalidateSheetCache，
+// 因此讀到的資料不會比最近一次寫入更舊；寫入路徑一律使用 readRowsFresh 避開快取。
+var SHEET_CACHE_TTL_SECONDS = 12;
+var SHEET_READ_CACHE = {};
+
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || 'health';
   if (action === 'health') return respond({ ok: true, data: { service: 'class-lunch-api', now: nowIso() } });
@@ -189,6 +197,25 @@ function sendCutoffReminders() {
 // -----------------------------------------------------------------------------
 // 身份、登入、重設密碼
 // -----------------------------------------------------------------------------
+
+/** 建立每 5 分鐘的暖機排程，降低 GAS 冷啟動造成的首次等待（需先設定 WARMUP_URL 指令碼屬性）。 */
+function setupWarmupTrigger() {
+  var url = String(getProperty('WARMUP_URL', ''));
+  if (!url) throw new Error('請先在「專案設定 > 指令碼屬性」設定 WARMUP_URL 為你的 Web App /exec 網址，再執行 setupWarmupTrigger()。');
+  var triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function(trigger) { if (trigger.getHandlerFunction() === 'warmupPing') ScriptApp.deleteTrigger(trigger); });
+  ScriptApp.newTrigger('warmupPing').timeBased().everyMinutes(5).create();
+  warmupPing();
+  return '已建立每 5 分鐘的暖機排程（執行身分：目前帳號）。';
+}
+function stopWarmupTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function(trigger) { if (trigger.getHandlerFunction() === 'warmupPing') ScriptApp.deleteTrigger(trigger); });
+  return '暖機排程已移除。';
+}
+function warmupPing() {
+  try { UrlFetchApp.fetch(String(getProperty('WARMUP_URL', '')) + '?action=health', { muteHttpExceptions: true, followRedirects: true }); } catch (e) {}
+}
 
 function getPublicConfig() {
   return { emailDomain: '', registrationRequiresEmail: true, registrationRequiresInviteOrAdminCode: true };
@@ -1249,25 +1276,54 @@ function sheet(name) {
   return sh;
 }
 
-function readRows(name) {
+function readRows(name) { return readRowsImpl(name, true); }
+function readRowsFresh(name) { return readRowsImpl(name, false); }
+function readRowsImpl(name, useCache) {
+  if (useCache && SHEET_READ_CACHE[name]) return SHEET_READ_CACHE[name];
+  if (useCache) {
+    var cached = getCachedRows(name);
+    if (cached) { SHEET_READ_CACHE[name] = cached; return cached; }
+  }
   var sh = sheet(name);
   var values = sh.getDataRange().getValues();
-  if (values.length < 2) return [];
-  var headers = values[0];
-  return values.slice(1).filter(function(row) { return row.some(function(value) { return value !== ''; }); }).map(function(row, index) {
-    var obj = { _row: index + 2 };
-    headers.forEach(function(header, i) { obj[header] = row[i]; });
-    return obj;
-  });
+  var rows = [];
+  if (values.length >= 2) {
+    var headers = values[0];
+    rows = values.slice(1).filter(function(row) { return row.some(function(value) { return value !== ''; }); }).map(function(row, index) {
+      var obj = { _row: index + 2 };
+      headers.forEach(function(header, i) { obj[header] = row[i]; });
+      return obj;
+    });
+  }
+  SHEET_READ_CACHE[name] = rows;
+  if (useCache) putCachedRows(name, rows);
+  return rows;
+}
+function getCachedRows(name) {
+  try {
+    var json = CacheService.getScriptCache().get('rows:' + name);
+    return json ? JSON.parse(json) : null;
+  } catch (e) { return null; }
+}
+function putCachedRows(name, rows) {
+  try { CacheService.getScriptCache().put('rows:' + name, JSON.stringify(rows), SHEET_CACHE_TTL_SECONDS); } catch (e) {}
+}
+function invalidateSheetCache(name) {
+  delete SHEET_READ_CACHE[name];
+  try { CacheService.getScriptCache().remove('rows:' + name); } catch (e) {}
 }
 
 function appendRow(name, fields) {
   var headers = SHEETS[name];
   sheet(name).appendRow(headers.map(function(header) { return fields[header] === undefined ? '' : fields[header]; }));
+  invalidateSheetCache(name);
 }
 
 function findOne(name, column, value) {
   return readRows(name).filter(function(row) { return String(row[column]) === String(value); })[0] || null;
+}
+function findOneFresh(name, column, value) {
+  return readRowsFresh(name).filter(function(row) { return String(row[column]) === String(value); })[0] || null;
 }
 
 function findOneByPair(name, key1, value1, key2, value2) {
@@ -1280,7 +1336,7 @@ function findLast(name) {
 }
 
 function updateRow(name, key, value, fields) {
-  var row = findOne(name, key, value);
+  var row = findOneFresh(name, key, value);
   if (!row) throw appError('ROW_NOT_FOUND', '找不到要更新的資料。');
   var headers = SHEETS[name];
   Object.keys(fields).forEach(function(field) {
@@ -1288,11 +1344,13 @@ function updateRow(name, key, value, fields) {
     if (col < 0) throw new Error('未知欄位：' + field);
     sheet(name).getRange(row._row, col + 1).setValue(fields[field]);
   });
+  invalidateSheetCache(name);
 }
 
 function deleteRowsWhere(name, predicate) {
-  var rows = readRows(name).filter(predicate).sort(function(a, b) { return b._row - a._row; });
+  var rows = readRowsFresh(name).filter(predicate).sort(function(a, b) { return b._row - a._row; });
   rows.forEach(function(row) { sheet(name).deleteRow(row._row); });
+  if (rows.length) invalidateSheetCache(name);
 }
 
 function appendTransaction(userId, adminId, amount, type) {

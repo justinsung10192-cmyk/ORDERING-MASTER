@@ -6,7 +6,7 @@
 | --- | --- |
 | 1 | 建立一份新的 Google 試算表，從「擴充功能 → Apps Script」開啟綁定式指令碼專案。 |
 | 2 | 從本次交付的完整 `class-lunch-Code.gs.zip` 解壓取得 `Code.gs`；在 Apps Script 編輯器中**全選並覆蓋**原本檔案的全部內容後儲存。請勿只複製聊天中的局部程式碼，也不要與舊版片段混用。 |
-| 3 | 在 Apps Script 左側「專案設定 → 指令碼屬性」設定 `FRONTEND_URL` 為你的正式網站網址（部署 Vercel 後即為 Vercel 網址；目前為 `https://classlunch-czdbzqtt.manus.space`）、`EMAIL_DOMAIN`（目前可留白）、至少 8 碼的 `ADMIN_AUTH_CODE`，以及僅由系統開發者保管的高強度 `DEVELOPER_MASTER_KEY`。第一次執行 `setupSystem()` 會自動寫入 `SPREADSHEET_ID` 與安全雜湊 Salt；`DEVELOPER_MASTER_KEY` 不可放在前端或交給班級管理者。 |
+| 3 | 在 Apps Script 左側「專案設定 → 指令碼屬性」設定 `FRONTEND_URL` 為你的正式網站網址（部署 Vercel 後即為 Vercel 網址；目前為 `https://classlunch-czdbzqtt.manus.space`）、`EMAIL_DOMAIN`（目前可留白）、至少 8 碼的 `ADMIN_AUTH_CODE`，以及僅由系統開發者保管的高強度 `DEVELOPER_MASTER_KEY`；若要啟用效能暖機，另加 `WARMUP_URL`＝你的 `/exec` 網址。第一次執行 `setupSystem()` 會自動寫入 `SPREADSHEET_ID` 與安全雜湊 Salt；`DEVELOPER_MASTER_KEY` 不可放在前端或交給班級管理者。 |
 | 4 | 在函式選單選擇 `setupSystem` 後按「執行」。首次授權需允許試算表、寄信與觸發器權限；它會建立訂餐資料表、`DeveloperAccounts` 開發者帳號表、標題列與每小時提醒觸發器，並安全補上 `Users` 的信箱驗證欄位。 |
 | 5 | 首次部署請選擇「部署 → 新增部署作業 → 網頁應用程式」。執行身分選擇自己，存取權應選擇可讓本網站伺服器存取的公開範圍（通常為「所有人」）；完成後保留 Web App URL。日後更新請至「部署 → 管理部署作業 → 編輯」，建立**新版本**後按「部署」，以維持同一個 `/exec` URL。 |
 | 6 | 對 Vercel 部署，本專案以 `api/gas.js` 提供 `/api/gas` 同網域代理；請在 Vercel 專案的 Environment Variables 設定 `GAS_WEB_APP_URL` 為你的 GAS Web App URL，無須在前端直接填寫 GAS 網址。若換用新的 GAS 部署，更新該環境變數後重新部署即可。 |
@@ -57,6 +57,27 @@
 ## 開發者代碼撤銷安全規則
 
 開發者工作台可直接撤銷尚未使用的管理者代碼；撤銷後不能再註冊班級管理者，已使用的代碼不可恢復或再次啟用。開發者帳號目前採「正確金鑰即時開通」模型，沒有另外的待開通狀態；金鑰錯誤時不會建立帳號。開發者 API 會以獨立的 Developer session 保護，未登入、session 失效、停用帳號或非開發者 token 都會拒絕。舊版 Apps Script 函式 `developerRevokeClassAdminCode({developerKey, codeId})` 仍可作為維運後門，但不應在前端呼叫；`DEVELOPER_MASTER_KEY` 只應保存於指令碼屬性。
+
+## 效能優化與暖機（2026 更新版）
+
+網站偏慢的主因是 Google Apps Script 冷啟動（一段時間沒人用後的首次請求約 2–6 秒）與每次請求都對試算表做多次整表讀取。本次 `Code.gs` 已加入兩層優化：
+
+1. **請求內去重快取**：同一個請求內，每張工作表最多只真正讀取一次（`SHEET_READ_CACHE`），先前 `getBootstrap`／`getAdminDashboard` 對同一張表重複讀取的問題直接消除。
+2. **跨請求短期快取**：`CacheService` 提供 12 秒的讀取快取（`SHEET_CACHE_TTL_SECONDS`），任何寫入（新增、修改、刪除）都會**立即失效**該工作表的快取，且寫入路徑一律改用 `readRowsFresh` 強制讀最新資料，因此不會讀到比最近一次寫入更舊的資料；即使多人同時使用，資料仍然一致。
+
+前端也已優化：登入／重整時原本連續呼叫 `getOpenSessions`＋`getBootstrap` 兩次 API，現改為只呼叫一次 `getBootstrap`（它已回傳相同的 sessions 與 orders），請求量直接減半。
+
+**因此這次必須重新部署 Apps Script**：完整覆蓋 `Code.gs` → 儲存 → 「部署 → 管理部署作業 → 建立新版本」→ 更新既有 Web App 部署（維持同一個 `/exec` 網址）。不更新也可以運作，但效能優化不會生效。
+
+### 選用：暖機排程（進一步降低冷啟動）
+
+1. 在「專案設定 → 指令碼屬性」新增 `WARMUP_URL`＝你的 Web App `/exec` 網址。
+2. 在 Apps Script 編輯器的函式選單選擇 `setupWarmupTrigger` 後執行（需授權觸發器權限）。
+3. 之後每 5 分鐘會以 `?action=health` 輕量探測一次（不讀試算表），讓部署保持熱機。
+
+此排程消耗約每天 288 次觸發器執行（配額內）與少量 UrlFetch 額度；不需要時可執行 `stopWarmupTrigger()` 移除。
+
+> **快取與代理的關係**：Vercel 的 `api/gas.js` 代理仍對瀏覽器回覆 `Cache-Control: no-store`（不讓瀏覽器端快取帳號、訂餐、錢包資料）；上面的 12 秒快取只存在於 Apps Script 伺服器端，且寫入即失效，兩者不衝突。
 
 ## 設定責任分工
 
