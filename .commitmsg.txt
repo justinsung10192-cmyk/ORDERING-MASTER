@@ -1,0 +1,1 @@
+修正場次結束功能：adminCloseSession 通知名單也有一樣被漏掉的 NaN 模式（已刪除帳號的 user_id 為 null），改為 null 安全過濾

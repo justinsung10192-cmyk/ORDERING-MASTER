@@ -54,7 +54,7 @@ export const actions = {
     await updateRows('sessions', { id: session.id }, { is_open: false, closed_at: new Date().toISOString(), cutoff_reminder_sent: true });
 
     const orders = await listRowsIn('orders', 'session_id', [session.id], { classId: ctx.classId });
-    const userIds = [...new Set(orders.map(order => String(order.user_id)).filter(Boolean))];
+    const userIds = [...new Set(orders.map(order => order.user_id).filter(value => value !== null && value !== undefined))];
     for (const userId of userIds) {
       await sendPushToUser(Number(userId), { title: '訂餐場次已截止', body: '此場次已提前結束，訂單與帳務維持不變。', url: '/' });
     }
