@@ -1,1 +1,0 @@
-修正：開發者「所有帳號」分頁崩潰（sections 被 map().join 變成字串後又呼叫 join）
