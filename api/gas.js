@@ -34,6 +34,7 @@ const PUBLIC = new Set([
   'resetPassword',
   'developerLogin',
   'developerRegister',
+  'developerVerifyEmail',
 ]);
 
 const DEVELOPER = new Set([
@@ -100,7 +101,8 @@ export default async function handler(req, res) {
     const ctx = { token };
     const maintenance = await isMaintenance();
     if (PUBLIC.has(action)) {
-      if (maintenance && action !== 'getPublicConfig') throw appError('MAINTENANCE', '系統維修中，請稍後再來。');
+      const devPublic = action === 'developerLogin' || action === 'developerRegister' || action === 'developerVerifyEmail';
+      if (maintenance && !devPublic && action !== 'getPublicConfig') throw appError('MAINTENANCE', '系統維修中，請稍後再來。');
     } else if (DEVELOPER.has(action)) {
       ctx.developer = await validateDeveloperSession(token);
     } else {

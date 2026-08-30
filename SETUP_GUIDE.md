@@ -97,10 +97,13 @@ select cron.schedule(
 > alter table public.verification_records add column if not exists pin_hash text not null default '';
 > ```
 
-> **升級提醒 2**：管理員登入封鎖功能需要 `admin_blocked_until` 欄位，請額外執行：
+> **升級提醒 2**：開發者信箱驗證與登入封鎖功能需要以下欄位，請額外執行：
 > ```sql
-> alter table public.users add column if not exists admin_blocked_until timestamptz;
+> alter table public.developers add column if not exists email_verified boolean not null default false;
+> alter table public.developers add column if not exists blocked_until timestamptz;
+> alter table public.auth_tokens add column if not exists developer_id bigint references public.developers(id) on delete cascade;
 > ```
+> （若先前曾執行過管理員版 `admin_blocked_until`，可忽略，或執行 `alter table public.users drop column if exists admin_blocked_until;` 清除）
 
 ## 第 6 步：建立第一個帳號（開發者）
 

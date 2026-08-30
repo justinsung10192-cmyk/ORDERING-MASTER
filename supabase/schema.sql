@@ -28,7 +28,6 @@ create table if not exists public.users (
   role             text not null default 'Student',
   wallet_balance   numeric(10,2) not null default 0,
   is_disabled      boolean not null default false,
-  admin_blocked_until timestamptz,
   email_verified   boolean not null default false,
   auth_version     int not null default 0,
   created_at       timestamptz not null default now(),
@@ -145,6 +144,7 @@ create table if not exists public.auth_tokens (
   id         bigint generated always as identity primary key,
   class_id   text not null default '',
   user_id    bigint references public.users(id) on delete cascade,
+  developer_id bigint references public.developers(id) on delete cascade,
   type       text not null,
   token_hash text not null,
   expires_at timestamptz not null,
@@ -196,6 +196,8 @@ create table if not exists public.developers (
   password_hash text not null,
   salt          text not null,
   is_disabled   boolean not null default false,
+  email_verified boolean not null default false,
+  blocked_until timestamptz,
   created_at    timestamptz not null default now()
 );
 

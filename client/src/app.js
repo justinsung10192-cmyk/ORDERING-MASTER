@@ -166,7 +166,7 @@ function renderDeveloperUsers(root) {
 function renderAuth() {
   app.innerHTML = htmlFromTemplate('auth-template');
   const host = $('#auth-content');
-  if (state.publicConfig?.maintenance && state.authMode !== 'developerLogin' && state.authMode !== 'developerRegister') {
+  if (state.publicConfig?.maintenance && state.authMode !== 'developerLogin' && state.authMode !== 'developerRegister' && state.authMode !== 'developerVerify') {
     host.innerHTML = `<div class="text-center"><div class="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-red-50 text-3xl">🔧</div><h1 class="mt-4 font-serif text-2xl font-black text-ledger">系統維修中</h1><p class="mt-2 text-sm leading-6 text-slate-500">系統正在進行維護，暫時無法登入與下單。請稍後再來，謝謝。</p><button data-auth="developerLogin" class="mt-6 w-full border-t border-dashed border-ledger/15 pt-4 text-center text-xs font-bold text-slate-500 underline underline-offset-4">開發者入口</button></div>`;
     return;
   }
@@ -176,6 +176,7 @@ function renderAuth() {
   else if (state.authMode === 'reset') host.innerHTML = renderResetForm();
   else if (state.authMode === 'developerLogin') host.innerHTML = renderDeveloperLoginForm();
   else if (state.authMode === 'developerRegister') host.innerHTML = renderDeveloperRegisterForm();
+  else if (state.authMode === 'developerVerify') host.innerHTML = renderDeveloperVerifyForm();
   else host.innerHTML = renderLoginForm();
 }
 
@@ -199,6 +200,10 @@ function renderDeveloperLoginForm() {
 
 function renderDeveloperRegisterForm() {
   return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">DEVELOPER ACTIVATION</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">開通開發者帳號</h1><p class="mt-2 text-sm leading-6 text-slate-500">請輸入開發者金鑰建立開發者帳號。金鑰不會儲存在前端。</p>${configNote()}<form id="developer-register-form" class="task-rule mt-5 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">開發者帳號</span><input name="username" autocomplete="username" pattern="[A-Za-z0-9._-]{3,40}" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">電子郵件</span><input name="email" type="email" autocomplete="email" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">密碼</span><input name="password" type="password" minlength="8" autocomplete="new-password" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">開發者金鑰</span><input name="activationKey" type="password" autocomplete="off" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證金鑰並建立帳號</button></form><button data-auth="developerLogin" class="mt-5 text-sm font-bold text-ledger underline underline-offset-4">← 回到開發者登入</button>`;
+}
+
+function renderDeveloperVerifyForm() {
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">DEVELOPER VERIFY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">驗證開發者信箱</h1><p class="mt-2 text-sm leading-6 text-slate-500">6 位數驗證碼已寄到你的信箱（15 分鐘內有效），驗證完成後才能登入開發者工作台。</p>${configNote()}<form id="developer-verify-form" class="task-rule mt-6 space-y-4 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">開發者帳號</span><input name="username" autocomplete="username" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">6 位數驗證碼</span><input name="code" inputmode="numeric" autocomplete="one-time-code" required pattern="[0-9]{6}" maxlength="6" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-center font-serif text-2xl font-black tracking-[.35em] outline-none focus:border-ledger" placeholder="000000" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證並前往登入</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="developerRegister" class="font-bold text-apricot underline underline-offset-4">重新註冊</button><button data-auth="developerLogin" class="font-bold text-ledger underline underline-offset-4">← 回到開發者登入</button></div>`;
 }
 
 function renderRegisterForm() {
@@ -669,6 +674,7 @@ async function onSubmit(event) {
   if (form.id === 'login-form') return submitLogin(form);
   if (form.id === 'developer-login-form') return submitDeveloperLogin(form);
   if (form.id === 'developer-register-form') return submitDeveloperRegister(form);
+  if (form.id === 'developer-verify-form') return submitDeveloperVerify(form);
   if (form.id === 'register-form') return submitRegister(form);
   if (form.id === 'verify-email-form') return submitVerifyRegistration(form);
   if (form.id === 'resend-verification-form') return submitResendVerification(form);
@@ -700,7 +706,7 @@ async function submitDeveloperLogin(form) {
   const data = formData(form);
   if (!String(data.username || '').trim()) return toast('請輸入開發者帳號。', 'error');
   if (!String(data.password || '')) return toast('請輸入密碼。', 'error');
-  await busy(form, async () => { const result = await api('developerLogin', data, '', true); saveDeveloperSession(result); await loadDeveloperApp(); toast('開發者登入成功。', 'success'); });
+  await busy(form, async () => { const result = await api('developerLogin', data, '', true); saveDeveloperSession(result); if (result.loginAlert && result.loginAlert.sent) toast('開發者登入已通知管理者信箱。', 'success'); await loadDeveloperApp(); toast('開發者登入成功。', 'success'); });
 }
 
 async function submitDeveloperRegister(form) {
@@ -708,7 +714,14 @@ async function submitDeveloperRegister(form) {
   if (!String(data.username || '').trim()) return toast('請輸入開發者帳號。', 'error');
   if (!String(data.email || '').trim()) return toast('請輸入電子郵件。', 'error');
   if (!String(data.password || '') || data.password.length < 8) return toast('密碼至少須為 8 個字元。', 'error');
-  await busy(form, async () => { const result = await api('developerRegister', data, '', true); state.authMode = 'developerLogin'; renderAuth(); toast(result.message || '開發者帳號已建立，請登入。', 'success'); });
+  await busy(form, async () => { const result = await api('developerRegister', data, '', true); state.authMode = 'developerVerify'; renderAuth(); toast(result.message || '開發者帳號已建立，請先完成信箱驗證。', 'success'); });
+}
+
+async function submitDeveloperVerify(form) {
+  const data = formData(form);
+  if (!String(data.username || '').trim()) return toast('請輸入開發者帳號。', 'error');
+  if (!/^\d{6}$/.test(String(data.code || '').trim())) return toast('請輸入 6 位數驗證碼。', 'error');
+  await busy(form, async () => { const result = await api('developerVerifyEmail', { username: data.username, code: String(data.code).trim() }); state.authMode = 'developerLogin'; renderAuth(); toast(result.message || '信箱驗證完成，請登入。', 'success'); });
 }
 
 async function submitLogin(form) {

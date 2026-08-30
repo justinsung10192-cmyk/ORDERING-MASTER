@@ -19,18 +19,27 @@ export default async function handler(req, res) {
       res.status(400).send(page('連結不正確', '此連結缺少必要的參數。'));
       return;
     }
-    const record = await findOne('auth_tokens', { token_hash: sha256Hex(code), type: 'AdminBlock' });
+    const record = await findOne('auth_tokens', { token_hash: sha256Hex(code) });
     if (!record || new Date(record.expires_at).getTime() < Date.now()) {
       res.status(410).send(page('連結已失效', '此封鎖連結已過期或已被使用。'));
       return;
     }
-    // 登出該管理員所有裝置
-    await supabase.from('auth_tokens').delete().eq('user_id', record.user_id).eq('type', 'Session');
-    // 封鎖登入 1 分鐘
-    await supabase.from('users').update({ admin_blocked_until: new Date(Date.now() + 60 * 1000).toISOString() }).eq('id', record.user_id);
+    const blocked = new Date(Date.now() + 60 * 1000).toISOString();
+    if (record.type === 'DevBlock' && record.developer_id) {
+      // 登出開發者所有裝置並封鎖 1 分鐘
+      await supabase.from('auth_tokens').delete().eq('developer_id', record.developer_id).eq('type', 'DevSession');
+      await supabase.from('developers').update({ blocked_until: blocked }).eq('id', record.developer_id);
+    } else if (record.type === 'AdminBlock' && record.user_id) {
+      // 登出該管理員所有裝置並封鎖 1 分鐘
+      await supabase.from('auth_tokens').delete().eq('user_id', record.user_id).eq('type', 'Session');
+      await supabase.from('users').update({ admin_blocked_until: blocked }).eq('id', record.user_id);
+    } else {
+      res.status(410).send(page('連結已失效', '此封鎖連結已過期或已被使用。'));
+      return;
+    }
     // 使用過的封鎖連結即失效
     await supabase.from('auth_tokens').delete().eq('id', record.id);
-    res.status(200).send(page('已封鎖此管理員', '該管理員的所有裝置已登出，並封鎖登入 1 分鐘。請確認實際操作者後再決定後續處置。'));
+    res.status(200).send(page('已封鎖該帳號', '該帳號的所有裝置已登出，並封鎖登入 1 分鐘。請確認實際操作者後再決定後續處置。'));
   } catch (error) {
     res.status(500).send(page('處理失敗', '請稍後再試。'));
   }

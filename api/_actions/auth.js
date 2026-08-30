@@ -1,47 +1,16 @@
 // 動作：公開設定、註冊、驗證、登入、密碼重設、升級管理員、Bootstrap
-import { randomBytes } from 'node:crypto';
 import { appError, sid, num, sha256Hex } from '../_lib/util.js';
 import { findOne, insertRow, updateRows, deleteRows, getAppSetting } from '../_lib/db.js';
 import {
   verifyPassword, createPassword, createSession, destroySession, bumpAuthVersion,
   issueEmailCode, consumeEmailCode, findOrCreateClass,
 } from '../_lib/auth.js';
-import { sendMail, verificationEmailHtml, resetEmailHtml, adminLoginAlertHtml } from '../_lib/mail.js';
+import { sendMail, verificationEmailHtml, resetEmailHtml } from '../_lib/mail.js';
 import { getVapidPublicKey } from '../_lib/push.js';
 import { publicUser, loadOpenSessions } from '../_lib/serialize.js';
 
 function cleanStudentNo(value) {
   return String(value || '').trim();
-}
-
-async function sendAdminLoginAlert(user) {
-  try {
-    const alertEmail = process.env.ADMIN_ALERT_EMAIL || 'justinsung1019.2@gmail.com';
-    const appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
-    const blockToken = randomBytes(24).toString('hex');
-    const classRow = await findOne('classes', { class_id: user.class_id });
-    await insertRow('auth_tokens', {
-      class_id: user.class_id,
-      user_id: user.id,
-      type: 'AdminBlock',
-      token_hash: sha256Hex(blockToken),
-      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    });
-    const time = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-    return await sendMail({
-      to: alertEmail,
-      subject: `【訂餐通】管理員登入通知：${user.student_name}`,
-      html: adminLoginAlertHtml({
-        name: user.student_name,
-        studentNo: user.student_no,
-        className: classRow ? classRow.name : '未指定',
-        time,
-        blockUrl: `${appUrl}/api/block?code=${blockToken}`,
-      }),
-    });
-  } catch (_) {
-    return { sent: false, message: '' };
-  }
 }
 
 export const actions = {
@@ -127,15 +96,8 @@ export const actions = {
     if (user.is_disabled) throw appError('DISABLED', '此帳號已停用。');
     if (!user.email_verified) throw appError('NOT_VERIFIED', '請先完成信箱驗證後再登入。');
     if (!verifyPassword(user, String(data.password || ''))) throw appError('INVALID_CREDENTIALS', '學號或密碼不正確。');
-    if (user.role === 'Admin' && user.admin_blocked_until && new Date(user.admin_blocked_until).getTime() > Date.now()) {
-      throw appError('BLOCKED', '此管理員帳號暫時被封鎖，請約 1 分鐘後再試。');
-    }
     const token = await createSession(user);
-    let adminAlert = { sent: false };
-    if (user.role === 'Admin') {
-      adminAlert = await sendAdminLoginAlert(user);
-    }
-    return { token, user: publicUser(user), adminAlert };
+    return { token, user: publicUser(user) };
   },
 
   async requestPasswordReset(data) {

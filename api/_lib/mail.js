@@ -74,3 +74,13 @@ export function adminLoginAlertHtml({ name, studentNo, className, time, blockUrl
     <p style="margin-top:16px;font-size:12px;color:#9aa8b5">此封鎖連結 30 分鐘內有效。緊急事件請使用開發者工作台處理。</p>
   </div>`;
 }
+
+export function developerLoginAlertHtml({ name, email, time, blockUrl }) {
+  return `<div style="font-family:'Noto Sans TC',sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#173B62">
+    <h2 style="margin:0 0 8px;color:#173B62">開發者登入通知</h2>
+    <p style="margin:0 0 16px;color:#5b6b7a;line-height:1.8">偵測到開發者帳號登入。若這不是本人操作，請立即封鎖。</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;line-height:1.8">${[['登入者', name], ['Email', email], ['時間', time]].map(([key, value]) => `<tr><td style="padding:6px 8px;color:#8a97a5">${key}</td><td style="padding:6px 8px;font-weight:700">${value}</td></tr>`).join('')}</table>
+    <a href="${blockUrl}" style="display:block;margin-top:20px;text-align:center;background:#b3261e;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:700">🔒 禁止此開發者登入（登出所有裝置，封鎖 1 分鐘）</a>
+    <p style="margin-top:16px;font-size:12px;color:#9aa8b5">此封鎖連結 30 分鐘內有效。</p>
+  </div>`;
+}

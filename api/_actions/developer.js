@@ -1,8 +1,9 @@
 // 動作：開發者工作台（班級管理者代碼、跨班級帳號管理、系統設定）
-import { appError, sid, num, sha256Hex } from '../_lib/util.js';
+import { randomBytes } from 'node:crypto';
+import { appError, sid, num, sha256Hex, randomDigits } from '../_lib/util.js';
 import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, getAppSetting, setAppSetting } from '../_lib/db.js';
 import { verifyPassword, createPassword, createDeveloperSession, destroySession, bumpAuthVersion, createClassAdminCodeValue } from '../_lib/auth.js';
-import { mailConfigured } from '../_lib/mail.js';
+import { mailConfigured, sendMail, verificationEmailHtml, developerLoginAlertHtml } from '../_lib/mail.js';
 import { sendPushToAll } from '../_lib/push.js';
 
 function publicDeveloper(developer) {
@@ -20,17 +21,61 @@ export const actions = {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw appError('INVALID_INPUT', '電子郵件格式不正確。');
     const existing = await findOne('developers', { username });
     if (existing) throw appError('DUPLICATE', '此開發者帳號已存在。');
+    const existingEmail = await findOne('developers', { email });
+    if (existingEmail) throw appError('DUPLICATE', '此信箱已被使用。');
     const { salt, hash } = createPassword(String(data.password || ''));
-    await insertRow('developers', { username, email, password_hash: hash, salt });
-    return { message: '開發者帳號已建立，請登入。' };
+    const developer = await insertRow('developers', { username, email, password_hash: hash, salt });
+    const code = randomDigits(6);
+    await insertRow('auth_tokens', {
+      type: 'DevVerify',
+      developer_id: developer.id,
+      token_hash: sha256Hex(code),
+      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    });
+    const delivery = await sendMail({ to: email, subject: '【訂餐通】開發者信箱驗證碼', html: verificationEmailHtml(code) });
+    return { message: '開發者帳號已建立。請先完成信箱驗證（驗證碼已寄出），再登入。', delivery };
+  },
+
+  async developerVerifyEmail(data) {
+    const developer = await findOne('developers', { username: String(data.username || '').trim() });
+    if (!developer) throw appError('NOT_FOUND', '找不到此開發者帳號。');
+    if (developer.email_verified) return { message: '此帳號已完成信箱驗證。' };
+    const code = String(data.code || '').trim();
+    const record = await findOne('auth_tokens', { type: 'DevVerify', developer_id: developer.id, token_hash: sha256Hex(code) });
+    if (!record || new Date(record.expires_at).getTime() < Date.now()) throw appError('INVALID_CODE', '驗證碼不正確或已過期。');
+    await updateRows('developers', { id: developer.id }, { email_verified: true });
+    await deleteRows('auth_tokens', { id: record.id });
+    return { message: '信箱驗證完成，請登入開發者工作台。' };
   },
 
   async developerLogin(data) {
     const developer = await findOne('developers', { username: String(data.username || '').trim() });
     if (!developer || developer.is_disabled) throw appError('INVALID_CREDENTIALS', '開發者帳號或密碼不正確。');
     if (!verifyPassword(developer, String(data.password || ''))) throw appError('INVALID_CREDENTIALS', '開發者帳號或密碼不正確。');
+    if (!developer.email_verified) throw appError('NOT_VERIFIED', '請先完成信箱驗證後再登入。');
+    if (developer.blocked_until && new Date(developer.blocked_until).getTime() > Date.now()) {
+      throw appError('BLOCKED', '此開發者帳號暫時被封鎖，請約 1 分鐘後再試。');
+    }
     const token = await createDeveloperSession(developer);
-    return { token, developer: publicDeveloper(developer) };
+    let loginAlert = { sent: false };
+    try {
+      const alertEmail = process.env.ADMIN_ALERT_EMAIL || 'justinsung1019.2@gmail.com';
+      const appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+      const blockToken = randomBytes(24).toString('hex');
+      await insertRow('auth_tokens', {
+        type: 'DevBlock',
+        developer_id: developer.id,
+        token_hash: sha256Hex(blockToken),
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      });
+      const time = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+      loginAlert = await sendMail({
+        to: alertEmail,
+        subject: `【訂餐通】開發者登入通知：${developer.username}`,
+        html: developerLoginAlertHtml({ name: developer.username, email: developer.email, time, blockUrl: `${appUrl}/api/block?code=${blockToken}` }),
+      });
+    } catch (_) { /* 通知失敗不阻擋登入 */ }
+    return { token, developer: publicDeveloper(developer), loginAlert };
   },
 
   async developerLogout(_data, ctx) {
