@@ -91,7 +91,7 @@ export const actions = {
     const order = await findOne('orders', { id: Number(data.orderId), user_id: ctx.user.id }, ctx.classId);
     if (!order) throw appError('ORDER_NOT_FOUND', '找不到訂單。');
     const session = await findOne('sessions', { id: order.session_id }, ctx.classId);
-    if (session && new Date(session.cutoff_time).getTime() < Date.now()) throw appError('CLOSED', '已截止，無法取消訂單。');
+    if (session && (!session.is_open || new Date(session.cutoff_time).getTime() < Date.now())) throw appError('CLOSED', '已截止，無法取消訂單。');
     if (order.pickup_status === 'PickedUp') throw appError('CLOSED', '餐點已取餐，無法取消。');
 
     const result = await callRpc('fn_refund_order', {

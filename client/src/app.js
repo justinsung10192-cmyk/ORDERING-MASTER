@@ -820,10 +820,10 @@ async function onSubmit(event) {
   if (form.id === 'forgot-form') return submitForgot(form);
   if (form.id === 'reset-form') return submitReset(form);
   if (form.id === 'order-form') return submitOrder(form);
-  if (form.id === 'store-form') return submitAdminSave('adminSaveStore', form, '已新增店家。', () => renderAdminCatalog($('#admin-content')));
-  if (form.id === 'menu-item-form') return submitAdminSave('adminSaveMenuItem', form, '已新增餐點。', () => renderAdminCatalog($('#admin-content')));
-  if (form.id === 'item-option-form') return submitAdminSave('adminSaveItemOption', form, '已新增客製選項。', () => renderAdminCatalog($('#admin-content')));
-  if (form.id === 'session-form') return submitAdminSave('adminSaveSession', form, result => result.notification ? `已建立訂餐場次，通知寄送：${result.notification.sent}/${result.notification.attempted} 位使用者。` : '已建立訂餐場次。', () => { state.admin.catalog = null; renderAdminSessions($('#admin-content')); });
+  if (form.id === 'store-form') return submitAdminSave('adminSaveStore', form, '已新增店家。', async () => { state.admin.catalog = null; await refreshOrders(true); });
+  if (form.id === 'menu-item-form') return submitAdminSave('adminSaveMenuItem', form, '已新增餐點。', async () => { state.admin.catalog = null; await refreshOrders(true); });
+  if (form.id === 'item-option-form') return submitAdminSave('adminSaveItemOption', form, '已新增客製選項。', async () => { state.admin.catalog = null; await refreshOrders(true); });
+  if (form.id === 'session-form') return submitAdminSave('adminSaveSession', form, result => result.notification ? `已建立訂餐場次，通知寄送：${result.notification.sent}/${result.notification.attempted} 位使用者。` : '已建立訂餐場次。', async () => { state.admin.catalog = null; await refreshOrders(true); });
   if (form.id === 'developer-settings-form') return submitAdminSave('developerSaveSettings', form, '開發者系統設定已儲存。', () => { state.developerSettings = null; return refreshDeveloperData(); });
 }
 
@@ -1048,15 +1048,15 @@ async function submitAdminSave(action, form, message, rerender) {
 function openSessionCutoffEditor(sessionId) {
   const session = state.admin.catalog?.sessions?.find(item => item.sessionId === sessionId);
   if (!session) return;
-  openConfirmModal({ eyebrow: 'EDIT CUTOFF', title: '修改場次截止時間', body: `<p class="text-sm leading-6 text-slate-500">新的截止時間必須在現在之後；若要立刻停止接單，請使用「提前結束」。</p><label class="mt-4 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">新的截止時間</span><input id="session-cutoff-input" type="datetime-local" value="${escapeAttr(toDateTimeInput(session.cutoffTime))}" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger"/></label>`, submitLabel: '儲存截止時間', onConfirm: async () => { const cutoffTime = $('#session-cutoff-input')?.value; if (!cutoffTime) throw new Error('請選擇新的截止時間。'); await api('adminUpdateSessionCutoff', { sessionId, cutoffTime }); closeModal(); state.admin.catalog = null; await renderAdminSessions($('#admin-content')); toast('場次截止時間已更新。', 'success'); } });
+  openConfirmModal({ eyebrow: 'EDIT CUTOFF', title: '修改場次截止時間', body: `<p class="text-sm leading-6 text-slate-500">新的截止時間必須在現在之後；若要立刻停止接單，請使用「提前結束」。</p><label class="mt-4 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">新的截止時間</span><input id="session-cutoff-input" type="datetime-local" value="${escapeAttr(toDateTimeInput(session.cutoffTime))}" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger"/></label>`, submitLabel: '儲存截止時間', onConfirm: async () => { const cutoffTime = $('#session-cutoff-input')?.value; if (!cutoffTime) throw new Error('請選擇新的截止時間。'); await api('adminUpdateSessionCutoff', { sessionId, cutoffTime }); closeModal(); state.admin.catalog = null; await refreshOrders(true); toast('場次截止時間已更新。', 'success'); } });
 }
 
 function confirmSessionClose(sessionId) {
-  openConfirmModal({ eyebrow: 'CLOSE SESSION', title: '提前結束此場次？', body: '<p>提前結束後，學生無法再送出新訂單；已送出的訂單與帳務資料會完整保留。</p>', submitLabel: '確認提前結束', onConfirm: async () => { await api('adminCloseSession', { sessionId }); closeModal(); state.admin.catalog = null; await renderAdminSessions($('#admin-content')); toast('場次已提前結束，停止接受新訂單。', 'success'); } });
+  openConfirmModal({ eyebrow: 'CLOSE SESSION', title: '提前結束此場次？', body: '<p>提前結束後，學生無法再送出新訂單；已送出的訂單與帳務資料會完整保留。</p>', submitLabel: '確認提前結束', onConfirm: async () => { await api('adminCloseSession', { sessionId }); closeModal(); state.admin.catalog = null; await refreshOrders(true); toast('場次已提前結束，停止接受新訂單。', 'success'); } });
 }
 
 function confirmSessionDelete(sessionId) {
-  openConfirmModal({ eyebrow: 'DELETE SESSION', title: '刪除此場次？', body: '<p>僅能刪除尚未有訂單的場次；已有訂單時系統會保留帳務資料並拒絕刪除。</p>', submitLabel: '確認刪除場次', onConfirm: async () => { await api('adminDeleteSession', { sessionId }); closeModal(); state.admin.catalog = null; await renderAdminSessions($('#admin-content')); toast('場次已刪除。', 'success'); } });
+  openConfirmModal({ eyebrow: 'DELETE SESSION', title: '刪除此場次？', body: '<p>僅能刪除尚未有訂單的場次；已有訂單時系統會保留帳務資料並拒絕刪除。</p>', submitLabel: '確認刪除場次', onConfirm: async () => { await api('adminDeleteSession', { sessionId }); closeModal(); state.admin.catalog = null; await refreshOrders(true); toast('場次已刪除。', 'success'); } });
 }
 
 function updateOrderTotal() {
@@ -1065,14 +1065,18 @@ function updateOrderTotal() {
   try { totalEl.textContent = money(calculateOrderTotal(item, item.options, $$('input[name="optionId"]:checked', form).map(input => input.value))); } catch (_) { totalEl.textContent = '資料錯誤'; }
 }
 
-async function refreshOrders() {
+async function refreshOrders(silent = false) {
   // 效能：只呼叫一次 getBootstrap（已含 user、sessions 與 orders），省下原本額外的一次請求。
   const data = await api('getBootstrap');
   state.sessions = data.sessions || [];
   state.orders = data.orders || [];
   state.user = data.user;
   syncUser();
-  renderShell();
+  if (!silent) {
+    renderShell();
+  } else {
+    renderView();
+  }
 }
 
 // ----自動刷新：新增場次、儲值、訂單異動會自動同步，不需手動重新載入----
@@ -1088,8 +1092,9 @@ function stopLunchCountdown() {
 
 async function autoRefreshTick() {
   if (!state.token || !apiConfigured() || document.hidden || state.operationPending || state.confirmAction || state.scannerMode) return;
-  if (state.view === 'admin' && state.admin.scanResult) return;
-  try { await refreshOrders(); } catch (_) { /* 背景刷新失敗時靜默，下一次再試。 */ }
+  if (state.view === 'admin' && (state.admin.scanResult || document.querySelector('#scanner-container'))) return;
+  if (document.querySelector('#confirm-modal.active') || document.querySelector('#merchant-option-form') || state.editingOrderId) return;
+  try { await refreshOrders(true); } catch (_) { /* 背景刷新失敗時靜默，下一次再試。 */ }
 }
 
 async function logout() {
@@ -1173,9 +1178,9 @@ async function processManualPin() {
 function openScanConfirmation() {
   const result = state.admin.scanResult; if (!result) return;
   const names = result.orders ? result.orders.map(o => escapeHtml(o.itemName)).join('、') : '';
-  if (result.mode === 'pickup') return openConfirmModal({ eyebrow: 'PICKUP CONFIRMATION', title: `確認 ${result.student.name} 取餐？`, body: `<p>將標記以下餐點為已取餐：</p><p class="mt-2 rounded-xl bg-mist p-3 font-bold">${names}</p>`, submitLabel: '確認取餐', onConfirm: async () => { await api('adminConfirmPickup', { userId: result.student.id, orderIds: result.orders.map(o => o.orderId) }); closeModal(); state.admin.scanResult = null; renderAdmin(); toast('已完成取餐核銷。', 'success'); } });
-  if (result.mode === 'checkout') return openConfirmModal({ eyebrow: 'CASH SETTLEMENT', title: `確認 ${result.student.name} 已結清？`, body: `<p>將以現金結清 <b class="text-apricot">${money(result.outstandingAmount)}</b>。</p><p class="mt-2 rounded-xl bg-mist p-3 text-xs">${names}</p>`, submitLabel: '標記已結清', onConfirm: async () => { await api('adminSettleCash', { userId: result.student.id, orderIds: result.orders.map(o => o.orderId) }); closeModal(); state.admin.scanResult = null; renderAdmin(); toast('已完成現金結清。', 'success'); } });
-  return openConfirmModal({ eyebrow: 'TOP-UP CONFIRMATION', title: `為 ${result.student.name} 儲值`, body: `<p>目前餘額：<b class="text-stamp">${money(result.walletBalance)}</b></p><p class="mt-2 text-xs leading-5 text-slate-500">儲值金會先抵扣既有現金未繳；不足時餘額將維持 0 元，尚未抵完的金額會保留為欠款。</p><label class="mt-4 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">本次實收金額</span><div class="relative"><input id="topup-amount" type="number" inputmode="decimal" min="1" max="100000" class="w-full rounded-xl border border-slate-200 px-3 py-3 pr-10 outline-none focus:border-ledger" placeholder="例如 100"/><span class="absolute right-3 top-3 text-sm text-slate-500">元</span></div></label>`, submitLabel: '確認儲值', onConfirm: async () => { const amount = Number($('#topup-amount').value); if (!amount || amount <= 0) throw new Error('請輸入正確的儲值金額。'); const data = await api('adminTopUp', { userId: result.student.id, amount }); closeModal(); state.user.walletBalance = state.user.id === result.student.id ? data.walletBalance : state.user.walletBalance; syncUser(); state.admin.scanResult = null; renderAdmin(); toast(`${data.message}${data.appliedToDebt ? ` 已抵扣 ${money(data.appliedToDebt)} 欠款，剩餘欠款 ${money(data.remainingDebt)}。` : ''}`, 'success'); } });
+  if (result.mode === 'pickup') return openConfirmModal({ eyebrow: 'PICKUP CONFIRMATION', title: `確認 ${result.student.name} 取餐？`, body: `<p>將標記以下餐點為已取餐：</p><p class="mt-2 rounded-xl bg-mist p-3 font-bold">${names}</p>`, submitLabel: '確認取餐', onConfirm: async () => { await api('adminConfirmPickup', { userId: result.student.id, orderIds: result.orders.map(o => o.orderId) }); closeModal(); state.admin.scanResult = null; await refreshOrders(true); toast('已完成取餐核銷。', 'success'); } });
+  if (result.mode === 'checkout') return openConfirmModal({ eyebrow: 'CASH SETTLEMENT', title: `確認 ${result.student.name} 已結清？`, body: `<p>將以現金結清 <b class="text-apricot">${money(result.outstandingAmount)}</b>。</p><p class="mt-2 rounded-xl bg-mist p-3 text-xs">${names}</p>`, submitLabel: '標記已結清', onConfirm: async () => { await api('adminSettleCash', { userId: result.student.id, orderIds: result.orders.map(o => o.orderId) }); closeModal(); state.admin.scanResult = null; await refreshOrders(true); toast('已完成現金結清。', 'success'); } });
+  return openConfirmModal({ eyebrow: 'TOP-UP CONFIRMATION', title: `為 ${result.student.name} 儲值`, body: `<p>目前餘額：<b class="text-stamp">${money(result.walletBalance)}</b></p><p class="mt-2 text-xs leading-5 text-slate-500">儲值金會先抵扣既有現金未繳；不足時餘額將維持 0 元，尚未抵完的金額會保留為欠款。</p><label class="mt-4 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">本次實收金額</span><div class="relative"><input id="topup-amount" type="number" inputmode="decimal" min="1" max="100000" class="w-full rounded-xl border border-slate-200 px-3 py-3 pr-10 outline-none focus:border-ledger" placeholder="例如 100"/><span class="absolute right-3 top-3 text-sm text-slate-500">元</span></div></label>`, submitLabel: '確認儲值', onConfirm: async () => { const amount = Number($('#topup-amount').value); if (!amount || amount <= 0) throw new Error('請輸入正確的儲值金額。'); const data = await api('adminTopUp', { userId: result.student.id, amount }); closeModal(); state.admin.scanResult = null; await refreshOrders(true); toast(`${data.message}${data.appliedToDebt ? ` 已抵扣 ${money(data.appliedToDebt)} 欠款，剩餘欠款 ${money(data.remainingDebt)}。` : ''}`, 'success'); } });
 }
 
 function createDeveloperClassAdminCode() {
@@ -1220,21 +1225,21 @@ async function developerLogout() {
 
 async function toggleUser(id, isDisabled) {
   const user = state.admin.users.find(u => u.id === id); if (!user) return;
-  openConfirmModal({ eyebrow: '帳號管理', title: `${isDisabled ? '停用' : '恢復'} ${user.name} 的帳號？`, body: `<p>${isDisabled ? '停用後將不能登入與使用 QR 驗證。' : '恢復後將可以重新登入與使用系統。'}</p>`, submitLabel: isDisabled ? '確認停用' : '確認恢復', onConfirm: async () => { await api('adminSetUserDisabled', { userId: id, isDisabled }); closeModal(); toast('帳號狀態已更新。', 'success'); await renderAdminUsers($('#admin-content')); } });
+  openConfirmModal({ eyebrow: '帳號管理', title: `${isDisabled ? '停用' : '恢復'} ${user.name} 的帳號？`, body: `<p>${isDisabled ? '停用後將不能登入與使用 QR 驗證。' : '恢復後將可以重新登入與使用系統。'}</p>`, submitLabel: isDisabled ? '確認停用' : '確認恢復', onConfirm: async () => { await api('adminSetUserDisabled', { userId: id, isDisabled }); closeModal(); toast('帳號狀態已更新。', 'success'); await refreshOrders(true); } });
 }
 
 function confirmUserDelete(id) {
   const user = state.admin.users.find(item => item.id === id); if (!user) return;
-  openConfirmModal({ eyebrow: 'DELETE ACCOUNT', title: `刪除 ${user.name} 的帳號？`, body: '<p>此操作會刪除帳號個資、登入憑證與未使用驗證碼。既有訂單與交易會保留為帳務紀錄，並以「已刪除帳號」顯示。</p>', submitLabel: '確認永久刪除', onConfirm: async () => { const result = await api('adminDeleteUser', { userId: id }); closeModal(); toast(`帳號已刪除；保留 ${result.retainedOrderCount} 筆訂單與 ${result.retainedTransactionCount} 筆交易紀錄。`, 'success'); await renderAdminUsers($('#admin-content')); } });
+  openConfirmModal({ eyebrow: 'DELETE ACCOUNT', title: `刪除 ${user.name} 的帳號？`, body: '<p>此操作會刪除帳號個資、登入憑證與未使用驗證碼.既有訂單與交易會保留為帳務紀錄，並以「已刪除帳號」顯示。</p>', submitLabel: '確認永久刪除', onConfirm: async () => { const result = await api('adminDeleteUser', { userId: id }); closeModal(); toast(`帳號已刪除；保留 ${result.retainedOrderCount} 筆訂單與 ${result.retainedTransactionCount} 筆交易紀錄。`, 'success'); await refreshOrders(true); } });
 }
 
 function openDirectTopUp(id) {
   const user = state.admin.users.find(u => u.id === id); if (!user) return;
-  openConfirmModal({ eyebrow: 'MANUAL TOP-UP', title: `為 ${user.name} 手動儲值`, body: `<p>目前餘額：<b class="text-stamp">${money(user.walletBalance)}</b></p><p class="mt-2 text-xs leading-5 text-slate-500">儲值金會優先抵扣既有現金未繳款項。</p><label class="mt-4 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">本次實收金額</span><div class="relative"><input id="topup-amount" type="number" inputmode="decimal" min="1" max="100000" class="w-full rounded-xl border border-slate-200 px-3 py-3 pr-10 outline-none focus:border-ledger" placeholder="例如 100"/><span class="absolute right-3 top-3 text-sm text-slate-500">元</span></div></label>`, submitLabel: '確認儲值', onConfirm: async () => { const amount = Number($('#topup-amount').value); if (!amount || amount <= 0) throw new Error('請輸入正確的儲值金額。'); const data = await api('adminTopUp', { userId: user.id, amount }); closeModal(); toast(`${data.message}${data.appliedToDebt ? ` 已抵扣 ${money(data.appliedToDebt)} 欠款，剩餘欠款 ${money(data.remainingDebt)}。` : ''}`, 'success'); await renderAdminUsers($('#admin-content')); } });
+  openConfirmModal({ eyebrow: 'MANUAL TOP-UP', title: `為 ${user.name} 手動儲值`, body: `<p>目前餘額：<b class="text-stamp">${money(user.walletBalance)}</b></p><p class="mt-2 text-xs leading-5 text-slate-500">儲值金會優先抵扣既有現金未繳款項。</p><label class="mt-4 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">本次實收金額</span><div class="relative"><input id="topup-amount" type="number" inputmode="decimal" min="1" max="100000" class="w-full rounded-xl border border-slate-200 px-3 py-3 pr-10 outline-none focus:border-ledger" placeholder="例如 100"/><span class="absolute right-3 top-3 text-sm text-slate-500">元</span></div></label>`, submitLabel: '確認儲值', onConfirm: async () => { const amount = Number($('#topup-amount').value); if (!amount || amount <= 0) throw new Error('請輸入正確的儲值金額。'); const data = await api('adminTopUp', { userId: user.id, amount }); closeModal(); toast(`${data.message}${data.appliedToDebt ? ` 已抵扣 ${money(data.appliedToDebt)} 欠款，剩餘欠款 ${money(data.remainingDebt)}。` : ''}`, 'success'); await refreshOrders(true); } });
 }
 
 function confirmCatalogDelete(action, data, title, description) {
-  openConfirmModal({ eyebrow: '刪除確認', title, body: `<p>${escapeHtml(description)}</p>`, submitLabel: '確認刪除', onConfirm: async () => { await api(action, data); closeModal(); state.admin.catalog = null; await renderAdminCatalog($('#admin-content')); toast('菜單資料已刪除。', 'success'); } });
+  openConfirmModal({ eyebrow: '刪除確認', title, body: `<p>${escapeHtml(description)}</p>`, submitLabel: '確認刪除', onConfirm: async () => { await api(action, data); closeModal(); state.admin.catalog = null; await refreshOrders(true); toast('菜單資料已刪除。', 'success'); } });
 }
 
 async function copyOrderText() {
@@ -1621,7 +1626,7 @@ function openDeductModal(userId) {
       const result = await api('adminDeductBalance', { userId, amount, note: $('#deduct-note')?.value || '' });
       closeModal();
       toast(result.message || '扣款完成。', 'success');
-      await renderAdminUsers($('#admin-content'));
+      await refreshOrders(true);
     },
   });
 }
@@ -1716,7 +1721,7 @@ function setOperationLock(locked) {
   });
 }
 async function busy(element, task) { if (state.operationPending) return; const button = element?.matches?.('button') ? element : (element ? $('button[type="submit"]', element) : null); const original = button ? button.innerHTML : ''; setOperationLock(true); if (button) { button.dataset.busy = 'true'; button.innerHTML = '處理中…'; } try { await task(); } catch (error) { toast(error.message || '系統暫時無法完成此操作。', 'error'); } finally { if (button && document.body.contains(button)) { button.innerHTML = original; delete button.dataset.busy; } setOperationLock(false); } }
-function orderCanBeChanged(session, order) { return new Date(session.cutoffTime) > new Date() && order.pickupStatus !== 'PickedUp' && order.paymentStatus !== 'PaidCash'; }
+function orderCanBeChanged(session, order) { return session.isOpen && new Date(session.cutoffTime) > new Date() && order.pickupStatus !== 'PickedUp' && order.paymentStatus !== 'PaidCash'; }
 function escapeHtml(value) { return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 function escapeAttr(value) { return escapeHtml(value).replace(/`/g,'&#096;'); }
 function cssEscape(value) { return window.CSS && window.CSS.escape ? window.CSS.escape(value) : String(value).replace(/(["\\])/g, '\\$1'); }
