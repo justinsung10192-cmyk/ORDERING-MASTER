@@ -141,7 +141,8 @@ function renderDeveloperView() {
 }
 
 function renderDeveloperSettings(root) {
-  root.innerHTML = `<div class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SYSTEM OWNER SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">開發者系統設定</h2><p class="mt-2 text-sm leading-6 text-slate-500">跨班級的系統與安全設定。各班管理者由各班在「帳號」頁自行維護，開發者不需介入。</p><section class="mt-4 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">郵件服務檢查（驗證信／重設信）</p><p id="developer-email-diagnostics" class="mt-1 text-xs leading-5 text-slate-500">檢查 Gmail SMTP 授權與寄送狀態。</p><button type="button" data-action="developer-check-email" class="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10">檢查郵件服務</button></section></div>`;
+  const maintenance = Boolean(state.developerSettings?.maintenance);
+  root.innerHTML = `<div class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SYSTEM OWNER SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">開發者系統設定</h2><p class="mt-2 text-sm leading-6 text-slate-500">跨班級的系統與安全設定。各班管理者由各班在「帳號」頁自行維護。</p><section class="mt-4 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">全服廣播通知</p><p class="mt-1 text-xs leading-5 text-slate-500">傳送自訂訊息給所有班級已開啟通知的裝置。</p><textarea id="developer-broadcast-message" maxlength="200" rows="2" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-ledger" placeholder="例如：明天校外教學，暫停訂餐一天。"></textarea><button type="button" data-action="developer-broadcast" class="mt-2 w-full rounded-lg bg-ledger px-3 py-2.5 text-xs font-bold text-white">傳送全服廣播</button></section><section class="mt-3 rounded-xl border border-red-100 bg-red-50/60 p-3"><p class="text-xs font-bold text-red-700">維修模式</p><p class="mt-1 text-xs leading-5 text-slate-500">開啟後，一般使用者與管理員無法登入（登入頁顯示維修中）；開發者可正常登入以關閉。</p><button type="button" data-action="developer-maintenance" data-enabled="${maintenance ? 'false' : 'true'}" class="mt-2 w-full rounded-lg px-3 py-2.5 text-xs font-bold text-white ${maintenance ? 'bg-ledger' : 'bg-red-700'}">${maintenance ? '目前維修中 · 點我恢復' : '開啟維修模式'}</button></section><section class="mt-3 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">郵件服務檢查（驗證信／重設信）</p><p id="developer-email-diagnostics" class="mt-1 text-xs leading-5 text-slate-500">檢查 Gmail SMTP 授權與寄送狀態。</p><button type="button" data-action="developer-check-email" class="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10">檢查郵件服務</button></section></div>`;
 }
 
 function renderDeveloperCodes(root) {
@@ -149,12 +150,26 @@ function renderDeveloperCodes(root) {
 }
 
 function renderDeveloperUsers(root) {
-  root.innerHTML = `<section class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.13em] text-stamp">ALL ACCOUNTS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">所有班級帳號</h2><p class="mt-2 text-xs leading-5 text-slate-500">可查看公開帳務摘要、停用／恢復或刪除帳號；密碼與驗證資料已遮蔽。</p></div><button data-action="developer-refresh" class="shrink-0 rounded-xl bg-mist px-3 py-2.5 text-xs font-bold text-ledger">重新整理</button></div><div class="mt-4 space-y-2">${state.developerUsers.length ? state.developerUsers.map(user => `<article class="rounded-xl border border-ledger/10 bg-mist/40 p-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="truncate text-sm font-black ${user.isDisabled ? 'text-slate-400 line-through' : 'text-ledger'}">${escapeHtml(user.name)} <span class="font-normal text-slate-500">${user.role === 'Admin' ? '管理員' : '學生'}</span></p><p class="mt-1 truncate text-[11px] text-slate-500">${escapeHtml(user.className || '未指定班級')} · ${escapeHtml(user.studentNo)} · ${escapeHtml(user.email)}</p><p class="mt-1 text-[11px] ${user.emailVerified ? 'text-stamp' : 'text-apricot'}">Email ${user.emailVerified ? '已驗證' : '未驗證'} · 錢包 ${money(user.walletBalance)}${user.isDisabled ? ' · 已停用' : ''}</p></div><div class="flex shrink-0 flex-col gap-1.5"><button data-action="developer-view-user" data-id="${escapeAttr(user.id)}" class="rounded-lg bg-white px-2.5 py-2 text-[11px] font-bold text-ledger ring-1 ring-ledger/10">查看</button><button data-action="developer-toggle-user" data-id="${escapeAttr(user.id)}" data-disabled="${user.isDisabled ? 'false' : 'true'}" class="rounded-lg ${user.isDisabled ? 'bg-stamp/10 text-stamp' : 'bg-red-50 text-red-700'} px-2.5 py-2 text-[11px] font-bold">${user.isDisabled ? '恢復' : '停用'}</button><button data-action="developer-delete-user" data-id="${escapeAttr(user.id)}" class="rounded-lg bg-red-700 px-2.5 py-2 text-[11px] font-bold text-white">刪除</button></div></div></article>`).join('') : emptyState('目前沒有學生帳號', '班級管理者註冊後，帳號會出現在這裡。')}</div></section>`;
+  const groups = new Map();
+  (state.developerUsers || []).forEach(user => {
+    const key = String(user.classId || 'none');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(user);
+  });
+  const sections = [...groups.entries()].map(([classId, users]) => {
+    const adminCount = users.filter(user => user.role === 'Admin').length;
+    return `<section><div class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-ledger px-3 py-2 text-white"><p class="text-xs font-black">${escapeHtml(users[0].className || '未指定班級')}</p><p class="text-[10px] font-bold text-white/85">${users.length} 人 · 管理員 ${adminCount} 人</p></div><div class="mt-2 space-y-2">${users.map(user => `<article class="rounded-xl border border-ledger/10 bg-mist/40 p-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="truncate text-sm font-black ${user.isDisabled ? 'text-slate-400 line-through' : 'text-ledger'}">${escapeHtml(user.name)} <span class="font-normal text-slate-500">${user.role === 'Admin' ? '管理員' : '學生'}</span></p><p class="mt-1 truncate text-[11px] text-slate-500">${escapeHtml(user.studentNo)} · ${escapeHtml(user.email)}</p><p class="mt-1 text-[11px] ${user.emailVerified ? 'text-stamp' : 'text-apricot'}">Email ${user.emailVerified ? '已驗證' : '未驗證'} · 錢包 ${money(user.walletBalance)}${user.isDisabled ? ' · 已停用' : ''}</p></div><div class="flex shrink-0 flex-col gap-1.5"><button data-action="developer-view-user" data-id="${escapeAttr(user.id)}" class="rounded-lg bg-white px-2.5 py-2 text-[11px] font-bold text-ledger ring-1 ring-ledger/10">查看</button><button data-action="developer-toggle-user" data-id="${escapeAttr(user.id)}" data-disabled="${user.isDisabled ? 'false' : 'true'}" class="rounded-lg px-2.5 py-2 text-[11px] font-bold ${user.isDisabled ? 'bg-stamp/10 text-stamp' : 'bg-red-50 text-red-700'}">${user.isDisabled ? '恢復' : '停用'}</button><button data-action="developer-delete-user" data-id="${escapeAttr(user.id)}" class="rounded-lg bg-red-700 px-2.5 py-2 text-[11px] font-bold text-white">刪除</button></div></div></article>`).join('')}</div></section>`;
+  }).join('');
+  root.innerHTML = `<section class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.13em] text-stamp">ALL ACCOUNTS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">所有班級帳號</h2><p class="mt-2 text-xs leading-5 text-slate-500">依班級分類；可查看公開帳務摘要、停用／恢復或刪除帳號。</p></div><button data-action="developer-refresh" class="shrink-0 rounded-xl bg-mist px-3 py-2.5 text-xs font-bold text-ledger">重新整理</button></div>${sections.length ? sections.join('') : emptyState('目前沒有帳號', '班級管理者註冊後，帳號會出現在這裡。')}</section>`;
 }
 
 function renderAuth() {
   app.innerHTML = htmlFromTemplate('auth-template');
   const host = $('#auth-content');
+  if (state.publicConfig?.maintenance && state.authMode !== 'developerLogin' && state.authMode !== 'developerRegister') {
+    host.innerHTML = `<div class="text-center"><div class="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-red-50 text-3xl">🔧</div><h1 class="mt-4 font-serif text-2xl font-black text-ledger">系統維修中</h1><p class="mt-2 text-sm leading-6 text-slate-500">系統正在進行維護，暫時無法登入與下單。請稍後再來，謝謝。</p><button data-auth="developerLogin" class="mt-6 w-full border-t border-dashed border-ledger/15 pt-4 text-center text-xs font-bold text-slate-500 underline underline-offset-4">開發者入口</button></div>`;
+    return;
+  }
   if (state.authMode === 'register') host.innerHTML = renderRegisterForm();
   else if (state.authMode === 'verifyEmail') host.innerHTML = renderVerifyEmailForm();
   else if (state.authMode === 'forgot') host.innerHTML = renderForgotForm();
@@ -408,9 +423,11 @@ async function renderWallet() {
     $('#wallet-balance').textContent = money(state.user.walletBalance);
     $('#wallet-unpaid').innerHTML = state.wallet.cashUnpaid > 0 ? `目前另有 <b class="tabular-nums">${money(state.wallet.cashUnpaid)}</b> 現金未繳，請出示「結帳 QR」供管理員核對。` : '目前沒有現金未繳款項。';
     $('#transaction-list').innerHTML = state.wallet.transactions.length ? state.wallet.transactions.map(t => `<div class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold">${t.type === 'TopUp' ? '儲值入帳' : '訂餐扣款'}</p><p class="mt-0.5 text-[11px] text-slate-500">${formatDateTime(t.timestamp)}</p></div><b class="text-sm tabular-nums ${t.amount >= 0 ? 'text-stamp' : 'text-apricot'}">${signedMoney(t.amount)}</b></div>`).join('') : emptyState('還沒有交易紀錄', '儲值或以餘額完成訂餐後，紀錄會出現在這裡。');
+    $('#wallet-orders').innerHTML = (state.wallet.orders || []).length ? state.wallet.orders.map(order => `<div class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold">${escapeHtml(order.itemName || '訂單')}</p><p class="mt-0.5 text-[11px] text-slate-500">${escapeHtml(order.orderDate || '')} · ${escapeHtml(order.storeName || '')}${order.paymentStatus === 'PaidWallet' ? '' : ' · 未結清'}</p></div><b class="text-sm tabular-nums text-ledger">${money(order.totalPrice)}</b></div>`).join('') : '';
   } catch (error) {
     $('#wallet-unpaid').textContent = '暫時無法讀取錢包資料。';
     $('#transaction-list').innerHTML = errorBlock(error.message);
+    const walletOrders = $('#wallet-orders'); if (walletOrders) walletOrders.innerHTML = '';
   }
 }
 
@@ -621,6 +638,8 @@ async function onClick(event) {
     if (action === 'set-admin') return confirmAdminRoleChange(button.dataset.id, 'Admin');
     if (action === 'remove-admin') return confirmAdminRoleChange(button.dataset.id, 'Student');
     if (action === 'developer-check-email') return developerCheckEmail();
+    if (action === 'developer-broadcast') return developerBroadcast();
+    if (action === 'developer-maintenance') return developerSetMaintenance(button.dataset.enabled === 'true');
     if (action === 'confirm-scan-action') return openScanConfirmation();
     if (action === 'close-modal') return closeModal();
     if (action === 'copy-order-text') return copyOrderText();
@@ -696,7 +715,7 @@ async function submitLogin(form) {
   const data = formData(form);
   if (!String(data.studentNo || '').trim()) return toast('請輸入學號。', 'error');
   if (!String(data.password || '')) return toast('請輸入密碼。', 'error');
-  await busy(form, async () => { const result = await api('login', data); saveSession(result); await loadApp(); toast('登入成功，午餐手帳已開啟。', 'success'); });
+  await busy(form, async () => { const result = await api('login', data); saveSession(result); if (result.adminAlert && result.adminAlert.sent) toast('管理員登入已通知管理者信箱。', 'success'); await loadApp(); toast('登入成功，午餐手帳已開啟。', 'success'); });
 }
 
 async function submitRegister(form) {
@@ -1207,6 +1226,25 @@ async function developerCheckEmail() {
     const diagnostics = await developerApi('developerGetEmailDiagnostics');
     if (target) { target.textContent = diagnostics.message; target.className = `mt-1 text-xs leading-5 ${diagnostics.gmailAuthorized ? 'text-stamp' : 'text-red-600'}`; }
   } catch (error) { if (target) { target.textContent = error.message; target.className = 'mt-1 text-xs leading-5 text-red-600'; } }
+}
+
+async function developerBroadcast() {
+  const message = String($('#developer-broadcast-message')?.value || '').trim();
+  if (!message) return toast('請輸入廣播內容。', 'error');
+  await busy($('#developer-broadcast-message'), async () => {
+    const result = await developerApi('developerBroadcast', { message });
+    toast(`廣播已送出：成功 ${result.sent}/${result.attempted} 台裝置。`, 'success');
+    const input = $('#developer-broadcast-message');
+    if (input) input.value = '';
+  });
+}
+
+async function developerSetMaintenance(enabled) {
+  await busy($('#developer-maintenance'), async () => {
+    await developerApi('developerSetMaintenance', { enabled });
+    toast(enabled ? '已開啟維修模式。' : '維修模式已關閉。', 'success');
+    await refreshDeveloperData();
+  });
 }
 
 async function api(action, data = {}, token = state.token, throwWhenUnconfigured = true) {

@@ -64,6 +64,29 @@ export async function sendPushToClass(classId, { title, body, url = '/' }) {
   return { sent, attempted: subscriptions.length };
 }
 
+export async function sendPushToAll({ title, body, url = '/' }) {
+  if (!pushConfigured()) return { sent: 0, attempted: 0 };
+  const { data: subscriptions, error } = await supabase.from('push_subscriptions').select('*');
+  if (error || !subscriptions?.length) return { sent: 0, attempted: 0 };
+
+  const payload = JSON.stringify({ title, body, url });
+  let sent = 0;
+  for (const subscription of subscriptions) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
+        payload,
+      );
+      sent += 1;
+    } catch (error) {
+      if (error?.statusCode === 404 || error?.statusCode === 410) {
+        await deleteRows('push_subscriptions', { endpoint: subscription.endpoint }).catch(() => {});
+      }
+    }
+  }
+  return { sent, attempted: subscriptions.length };
+}
+
 // 前端訂閱時需要的 VAPID 公鑰
 export function getVapidPublicKey() {
   return vapidPublicKey;

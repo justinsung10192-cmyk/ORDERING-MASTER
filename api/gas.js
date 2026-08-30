@@ -2,6 +2,7 @@
 // 前端仍以 POST /api/gas（text/plain JSON {action, data, token}）呼叫，
 // 此函式把動作轉發給 Supabase Postgres 處理，並回傳 {ok, data} 或 {ok:false, error}。
 import { readRawBody, sendJson, appError } from './_lib/util.js';
+import { getAppSetting } from './_lib/db.js';
 import { validateSession, validateDeveloperSession } from './_lib/auth.js';
 import { actions as authActions } from './_actions/auth.js';
 import { actions as ordersActions } from './_actions/orders.js';
@@ -47,6 +48,8 @@ const DEVELOPER = new Set([
   'developerSetUserDisabled',
   'developerDeleteUser',
   'developerGetEmailDiagnostics',
+  'developerBroadcast',
+  'developerSetMaintenance',
 ]);
 
 const ADMIN = new Set([
@@ -70,7 +73,6 @@ const ADMIN = new Set([
   'adminListInviteCodes',
   'adminCreateInviteCode',
   'adminDisableInviteCode',
-  'adminGetEmailDiagnostics',
   'adminResolveVerification',
   'adminConfirmPickup',
   'adminSettleCash',
@@ -78,6 +80,10 @@ const ADMIN = new Set([
 ]);
 
 export const config = { api: { bodyParser: false } };
+
+async function isMaintenance() {
+  try { return (await getAppSetting('', 'maintenance', '')) === '1'; } catch (_) { return false; }
+}
 
 export default async function handler(req, res) {
   try {
@@ -92,11 +98,13 @@ export default async function handler(req, res) {
     }
 
     const ctx = { token };
+    const maintenance = await isMaintenance();
     if (PUBLIC.has(action)) {
-      // 免登入動作
+      if (maintenance && action !== 'getPublicConfig') throw appError('MAINTENANCE', '系統維修中，請稍後再來。');
     } else if (DEVELOPER.has(action)) {
       ctx.developer = await validateDeveloperSession(token);
     } else {
+      if (maintenance) throw appError('MAINTENANCE', '系統維修中，請稍後再來。');
       ctx.user = await validateSession(token);
       ctx.classId = ctx.user.class_id;
       if (ctx.user.role === 'Developer') throw appError('FORBIDDEN', '開發者帳號無法使用一般功能。');

@@ -3,6 +3,7 @@ import { appError, sid, num, sha256Hex } from '../_lib/util.js';
 import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, getAppSetting, setAppSetting } from '../_lib/db.js';
 import { verifyPassword, createPassword, createDeveloperSession, destroySession, bumpAuthVersion, createClassAdminCodeValue } from '../_lib/auth.js';
 import { mailConfigured } from '../_lib/mail.js';
+import { sendPushToAll } from '../_lib/push.js';
 
 function publicDeveloper(developer) {
   return { username: developer.username, name: developer.username, email: developer.email };
@@ -52,6 +53,7 @@ export const actions = {
       isDisabled: user.is_disabled,
       emailVerified: user.email_verified,
       className: classByName.get(String(user.class_id)) || '未指定班級',
+      classId: sid(user.class_id),
     }));
   },
 
@@ -132,7 +134,9 @@ export const actions = {
   },
 
   async developerGetSettings() {
-    return {};
+    let maintenance = false;
+    try { maintenance = (await getAppSetting('', 'maintenance', '')) === '1'; } catch (_) { /* 忽略 */ }
+    return { maintenance };
   },
 
   async developerSaveSettings() {
@@ -148,6 +152,18 @@ export const actions = {
       gmailAuthorized: configured,
       remainingDailyQuota: configured ? 500 : 0,
     };
+  },
+
+  async developerBroadcast(data) {
+    const message = String(data.message || '').trim().slice(0, 200);
+    if (!message) throw appError('INVALID_INPUT', '請輸入廣播內容。');
+    const result = await sendPushToAll({ title: '系統廣播', body: message, url: '/' });
+    return { ok: true, sent: result.sent, attempted: result.attempted };
+  },
+
+  async developerSetMaintenance(data) {
+    await setAppSetting('', 'maintenance', Boolean(data.enabled) ? '1' : '0');
+    return { ok: true, maintenance: Boolean(data.enabled) };
   },
 };
 

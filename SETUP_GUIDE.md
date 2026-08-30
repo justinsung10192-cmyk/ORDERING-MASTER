@@ -97,6 +97,11 @@ select cron.schedule(
 > alter table public.verification_records add column if not exists pin_hash text not null default '';
 > ```
 
+> **升級提醒 2**：管理員登入封鎖功能需要 `admin_blocked_until` 欄位，請額外執行：
+> ```sql
+> alter table public.users add column if not exists admin_blocked_until timestamptz;
+> ```
+
 ## 第 6 步：建立第一個帳號（開發者）
 
 1. 打開你的 Vercel 網址 → 登入頁最下方「**開發者入口**」→「註冊開發者帳號」

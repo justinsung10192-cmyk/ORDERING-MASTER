@@ -28,6 +28,7 @@ create table if not exists public.users (
   role             text not null default 'Student',
   wallet_balance   numeric(10,2) not null default 0,
   is_disabled      boolean not null default false,
+  admin_blocked_until timestamptz,
   email_verified   boolean not null default false,
   auth_version     int not null default 0,
   created_at       timestamptz not null default now(),

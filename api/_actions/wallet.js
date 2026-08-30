@@ -1,6 +1,6 @@
 // 動作：錢包歷史、管理員儲值、現金結清
 import { appError, sid, num, round2 } from '../_lib/util.js';
-import { findOne, listRows, callRpc } from '../_lib/db.js';
+import { findOne, listRows, listRowsIn, callRpc } from '../_lib/db.js';
 import { publicUser, outstandingOf } from '../_lib/serialize.js';
 
 export const actions = {
@@ -15,6 +15,15 @@ export const actions = {
     const orders = await listRows('orders', { classId: ctx.classId, filters: { user_id: ctx.user.id } });
     const cashUnpaid = round2(orders.reduce((sum, order) => sum + outstandingOf(order), 0));
     const freshUser = await findOne('users', { id: ctx.user.id });
+
+    const recentOrders = await listRows('orders', { classId: ctx.classId, filters: { user_id: ctx.user.id }, order: 'created_at', orderAscending: false, limit: 20 });
+    const recentSessionIds = [...new Set(recentOrders.map(order => order.session_id))];
+    const recentSessions = recentSessionIds.length ? await listRowsIn('sessions', 'id', recentSessionIds, { classId: ctx.classId }) : [];
+    const recentSessionById = new Map(recentSessions.map(session => [String(session.id), session]));
+    const recentStoreIds = [...new Set(recentSessions.map(session => session.store_id))];
+    const recentStores = recentStoreIds.length ? await listRowsIn('stores', 'id', recentStoreIds, { classId: ctx.classId }) : [];
+    const recentStoreById = new Map(recentStores.map(store => [String(store.id), store]));
+
     return {
       user: publicUser(freshUser),
       cashUnpaid,
@@ -23,6 +32,19 @@ export const actions = {
         amount: num(transaction.amount),
         timestamp: transaction.created_at,
       })),
+      orders: recentOrders.map(order => {
+        const session = recentSessionById.get(String(order.session_id));
+        return {
+          orderId: sid(order.id),
+          sessionId: sid(order.session_id),
+          orderDate: session?.order_date || '',
+          storeName: (session && recentStoreById.get(String(session.store_id))?.name) || '未指定店家',
+          itemName: (order.items || []).map(item => `${Number(item.quantity) > 1 ? `${Number(item.quantity)}×` : ''}${item.itemName}`).join('、'),
+          totalPrice: num(order.total_price),
+          paymentStatus: order.payment_status,
+          pickupStatus: order.pickup_status,
+        };
+      }),
     };
   },
 
