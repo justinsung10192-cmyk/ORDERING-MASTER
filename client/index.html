@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
     <meta name="theme-color" content="#173B62" />
     <meta name="description" content="手機優先的班級訂午餐、錢包與取餐核對系統。" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="訂餐通" />
     <title>班級訂午餐系統</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -135,7 +141,7 @@
     <template id="settings-view">
       <section class="view-enter space-y-5">
         <div class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-center gap-4"><span id="settings-avatar" class="grid h-14 w-14 place-items-center rounded-2xl bg-ledger text-xl font-black text-white"></span><div><h1 id="settings-name" class="font-serif text-xl font-black"></h1><p id="settings-meta" class="mt-1 text-sm text-slate-500"></p></div></div><div class="mt-5 grid grid-cols-2 gap-2"><div class="rounded-xl bg-mist px-3 py-3"><p class="text-[11px] font-bold text-slate-500">儲值餘額</p><p id="settings-balance" class="mt-1 font-bold tabular-nums text-stamp"></p></div><div class="rounded-xl bg-mist px-3 py-3"><p class="text-[11px] font-bold text-slate-500">帳號權限</p><p id="settings-role" class="mt-1 font-bold text-ledger"></p></div></div></div>
-        <div class="overflow-hidden rounded-[1.35rem] bg-white shadow-paper ring-1 ring-ledger/5"><button data-action="open-upgrade" class="flex w-full items-center justify-between px-5 py-4 text-left"><span><span class="block font-bold">管理員權限</span><span class="mt-1 block text-xs text-slate-500">輸入系統授權碼以開啟管理工作台。</span></span><span class="text-ledger">›</span></button><div class="mx-5 h-px bg-slate-100"></div><button data-action="logout" class="flex w-full items-center justify-between px-5 py-4 text-left text-red-600"><span><span class="block font-bold">登出</span><span class="mt-1 block text-xs text-red-400">清除本機的登入憑證。</span></span><span>›</span></button></div>
+        <div class="overflow-hidden rounded-[1.35rem] bg-white shadow-paper ring-1 ring-ledger/5"><button data-action="toggle-notifications" class="flex w-full items-center justify-between px-5 py-4 text-left"><span><span class="block font-bold">手機通知</span><span id="notification-status" class="mt-1 block text-xs text-slate-500">檢查中…</span></span><span id="notification-switch" class="grid h-6 w-11 shrink-0 place-items-center rounded-full bg-slate-200 transition"><span class="h-4 w-4 rounded-full bg-white shadow"></span></span></button><div class="mx-5 h-px bg-slate-100"></div><button data-action="install-app" id="install-app-button" class="hidden w-full items-center justify-between px-5 py-4 text-left"><span><span class="block font-bold">釘選到桌面</span><span class="mt-1 block text-xs text-slate-500">像 App 一樣使用，通知更可靠。</span></span><span class="text-ledger">›</span></button><div class="mx-5 h-px bg-slate-100"></div><button data-action="open-upgrade" class="flex w-full items-center justify-between px-5 py-4 text-left"><span><span class="block font-bold">管理員權限</span><span class="mt-1 block text-xs text-slate-500">輸入系統授權碼以開啟管理工作台。</span></span><span class="text-ledger">›</span></button><div class="mx-5 h-px bg-slate-100"></div><button data-action="logout" class="flex w-full items-center justify-between px-5 py-4 text-left text-red-600"><span><span class="block font-bold">登出</span><span class="mt-1 block text-xs text-red-400">清除本機的登入憑證。</span></span><span>›</span></button></div>
       </section>
     </template>
 

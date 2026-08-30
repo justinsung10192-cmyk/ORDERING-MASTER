@@ -1,67 +1,110 @@
-// Vercel Serverless Function：同網域代理 Google Apps Script。
-// 前端 app.js 以 text/plain JSON POST 到 /api/gas（見 client/index.html 的
-// window.LUNCH_CONFIG.apiUrl），此函式原樣轉送，不解析、不保存帳號／訂餐資料，
-// 避免瀏覽器直接呼叫跨網域的 GAS 端點。
-//
-// 需在 Vercel 的 Environment Variables 設定：
-//   GAS_WEB_APP_URL=https://script.google.com/macros/s/你的部署ID/exec
+// 主路由器：取代舊的「GAS 代理」。
+// 前端仍以 POST /api/gas（text/plain JSON {action, data, token}）呼叫，
+// 此函式把動作轉發給 Supabase Postgres 處理，並回傳 {ok, data} 或 {ok:false, error}。
+import { readRawBody, sendJson, appError } from './_lib/util.js';
+import { validateSession, validateDeveloperSession } from './_lib/auth.js';
+import { actions as authActions } from './_actions/auth.js';
+import { actions as ordersActions } from './_actions/orders.js';
+import { actions as walletActions } from './_actions/wallet.js';
+import { actions as verificationActions } from './_actions/verification.js';
+import { actions as sessionsActions } from './_actions/sessions.js';
+import { actions as adminActions } from './_actions/admin.js';
+import { actions as developerActions } from './_actions/developer.js';
+import { actions as pushActions } from './_actions/push.js';
 
-export const config = {
-  api: { bodyParser: false },
+const HANDLERS = {
+  ...authActions,
+  ...ordersActions,
+  ...walletActions,
+  ...verificationActions,
+  ...sessionsActions,
+  ...adminActions,
+  ...developerActions,
+  ...pushActions,
 };
 
-const GAS_WEB_APP_URL = process.env.GAS_WEB_APP_URL;
+const PUBLIC = new Set([
+  'getPublicConfig',
+  'register',
+  'verifyRegistration',
+  'resendRegistrationVerification',
+  'login',
+  'requestPasswordReset',
+  'resetPassword',
+  'developerLogin',
+  'developerRegister',
+]);
 
-function readRawBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
-  });
-}
+const DEVELOPER = new Set([
+  'developerLogout',
+  'developerListUsers',
+  'developerListClassAdminCodes',
+  'developerGetSettings',
+  'developerSaveSettings',
+  'developerIssueClassAdminCode',
+  'developerRevokeClassAdminCode',
+  'developerGetUserDetails',
+  'developerSetUserDisabled',
+  'developerDeleteUser',
+]);
+
+const ADMIN = new Set([
+  'getAdminDashboard',
+  'adminCatalog',
+  'adminSaveStore',
+  'adminSaveMenuItem',
+  'adminSaveItemOption',
+  'adminDeleteStore',
+  'adminDeleteMenuItem',
+  'adminDeleteItemOption',
+  'adminSaveSession',
+  'adminUpdateSessionCutoff',
+  'adminCloseSession',
+  'adminDeleteSession',
+  'adminListUsers',
+  'adminSetUserDisabled',
+  'adminDeleteUser',
+  'adminGetSettings',
+  'adminSaveSettings',
+  'adminListInviteCodes',
+  'adminCreateInviteCode',
+  'adminDisableInviteCode',
+  'adminGetEmailDiagnostics',
+  'adminResolveVerification',
+  'adminConfirmPickup',
+  'adminSettleCash',
+  'adminTopUp',
+]);
+
+export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res
-      .status(405)
-      .setHeader("Cache-Control", "no-store")
-      .json({ ok: false, error: "僅接受 POST 請求。" });
-    return;
-  }
-
-  if (!GAS_WEB_APP_URL) {
-    console.error("[GAS Proxy] GAS_WEB_APP_URL 未設定");
-    res
-      .status(500)
-      .setHeader("Cache-Control", "no-store")
-      .json({ ok: false, error: "伺服器尚未設定 Google Apps Script 端點。" });
-    return;
-  }
-
   try {
     const body = await readRawBody(req);
-    const upstream = await fetch(GAS_WEB_APP_URL, {
-      method: "POST",
-      redirect: "follow",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body,
-    });
+    const parsed = JSON.parse(body || '{}');
+    const action = parsed?.action;
+    const data = parsed?.data || {};
+    const token = parsed?.token || '';
 
-    const contentType =
-      upstream.headers.get("content-type") || "application/json; charset=utf-8";
-    const responseText = await upstream.text();
+    if (!action || typeof action !== 'string' || !HANDLERS[action]) {
+      return sendJson(res, { ok: false, error: '未知的動作。' });
+    }
 
-    res
-      .status(upstream.status)
-      .setHeader("Cache-Control", "no-store")
-      .setHeader("Content-Type", contentType)
-      .send(responseText);
+    const ctx = { token };
+    if (PUBLIC.has(action)) {
+      // 免登入動作
+    } else if (DEVELOPER.has(action)) {
+      ctx.developer = await validateDeveloperSession(token);
+    } else {
+      ctx.user = await validateSession(token);
+      ctx.classId = ctx.user.class_id;
+      if (ctx.user.role === 'Developer') throw appError('FORBIDDEN', '開發者帳號無法使用一般功能。');
+      if (ADMIN.has(action) && ctx.user.role !== 'Admin') throw appError('FORBIDDEN', '需要管理員權限。');
+    }
+
+    const result = await HANDLERS[action](data, ctx);
+    return sendJson(res, { ok: true, data: result });
   } catch (error) {
-    console.error("[GAS Proxy] 轉送失敗:", error);
-    res
-      .status(502)
-      .setHeader("Cache-Control", "no-store")
-      .json({ ok: false, error: "無法連線至訂餐服務，請稍後再試。" });
+    return sendJson(res, { ok: false, error: error?.message || '系統暫時無法完成此操作。' });
   }
 }

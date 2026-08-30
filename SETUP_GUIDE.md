@@ -1,0 +1,104 @@
+# 建置步驟（約 30–40 分鐘，照順序做）
+
+> 目標：Vercel（前端＋API）＋ Supabase（資料庫）＋ Resend（Email）＋ Web Push（手機通知）。
+> 舊的 Google 試算表／Apps Script 不再需要；既有資料不保留，全新開始。
+
+---
+
+## 第 1 步：建立 Supabase 專案（約 10 分鐘）
+
+1. 到 https://supabase.com 註冊（免費）→ **New project**
+   - Name：`class-lunch`，密碼自訂並**保存**，Region 選最接近你的（如 Singapore / Tokyo）
+2. 建立後，到 **SQL Editor**，把 `supabase/schema.sql` 的內容**整段貼上執行**（建立資料表＋金流函式）
+3. 到 **Project Settings → API** 複製兩樣東西：
+   - `Project URL`（形如 `https://xxxx.supabase.co`）
+   - `service_role` key（形如 `eyJ...`，**等同資料庫管理員權限，只放伺服器端**）
+4. 到 **Project Settings → Database → Connection string**（選 **Transaction pooler**）複製備用（本機測試時用）
+
+## 第 2 步：產生 VAPID 金鑰（推播用）
+
+在專案資料夾本機執行（已安裝 Node 的話）：
+
+```bash
+npm install
+npm run generate:vapid
+```
+
+會印出兩行 `VAPID_PUBLIC_KEY=...` 與 `VAPID_PRIVATE_KEY=...`，留著下一步用。
+
+## 第 3 步：部署到 Vercel
+
+1. 把這個資料夾推上 GitHub（`git add . && git commit && git push`）
+2. 到 https://vercel.com/new 匯入儲存庫（設定已寫在 `vercel.json`，不用改）
+3. 在 **Settings → Environment Variables** 新增：
+
+| 變數 | 值 |
+| --- | --- |
+| `SUPABASE_URL` | 第 1 步的 Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | 第 1 步的 service_role key |
+| `APP_URL` | 你的 Vercel 網址（如 `https://class-lunch.vercel.app`，不加斜線） |
+| `RESEND_API_KEY` | 第 4 步取得 |
+| `EMAIL_FROM` | 如 `班級訂午餐 <no-reply@你的網域>`（第 4 步驗證網域） |
+| `VAPID_PUBLIC_KEY` | 第 2 步產生 |
+| `VAPID_PRIVATE_KEY` | 第 2 步產生 |
+| `CRON_SECRET` | 自訂一串隨機字元（排程保護用） |
+| `DEVELOPER_MASTER_KEY` | 自訂另一串隨機字元（開發者註冊用） |
+
+4. 按 **Deploy**，等建置完成。
+
+## 第 4 步：Email（Resend，只有驗證信／重設信）
+
+1. 到 https://resend.com 註冊（免費層：3000 封/月、100 封/日）
+2. **Domains** → 新增網域並照指示加 DNS 記錄（沒有自己的網域，可用免費的 `onboarding@resend.dev` 測試寄信，正式使用前建議綁定網域）
+3. 取得 `API Key`（`re_...`）填入 Vercel 的 `RESEND_API_KEY`
+4. `EMAIL_FROM` 的寄件地址要與驗證過的網域一致
+
+## 第 5 步：啟用截止提醒排程（選用）
+
+部署完成後，到 Supabase **SQL Editor** 執行（把網址與 CRON_SECRET 換成你的）：
+
+```sql
+select cron.schedule(
+  'cutoff-reminders',
+  '0 * * * *',
+  $$ select net.http_post(
+       url := 'https://你的-app.vercel.app/api/cron?secret=你的CRON_SECRET',
+       headers := jsonb_build_object('Content-Type','application/json'),
+       body := '{}'
+     ) $$
+);
+```
+
+移除排程：`select cron.unschedule('cutoff-reminders');`
+
+## 第 6 步：建立第一個帳號（開發者）
+
+1. 打開你的 Vercel 網址 → 登入頁最下方「**開發者入口**」→「註冊開發者帳號」
+2. 輸入帳號／Email／密碼／**開發者金鑰**（＝Vercel 的 `DEVELOPER_MASTER_KEY`）
+3. 登入開發者工作台 →「**核發代碼**」→ 輸入班級名稱（例如「三年甲班」）→ 得到一組**班級管理者代碼**（只顯示一次，請保存）
+4. 回到一般登入頁 →「註冊帳號」→ 填學號／座號／姓名／Email／密碼，**班級管理者代碼欄**貼上第 3 步的代碼
+5. 收信輸入驗證碼 → 登入 → 此帳號即為**管理員**（可建立場次、菜單、掃碼、儲值）
+
+## 第 7 步：學生加入（邀請碼）
+
+1. 管理員 → 管理 →「設定」→「產生邀請碼」→ 複製代碼（只顯示一次）
+2. 學生註冊時在「邀請碼」欄貼上即可（一般使用者）
+3. 學生登入後 → 右上角頭像（設定）→「**手機通知**」開啟 → 依提示把網站**釘選到桌面**（Chrome／Edge：網址列安裝圖示；iPhone：Safari「加入主畫面」）
+
+## 第 8 步：上線檢查
+
+```bash
+# 本機有 Node 的話：
+API_BASE=https://你的-app.vercel.app/api/gas node scripts/smoke-test.js
+```
+
+接著實際測試：建立店家與餐點 → 建立場次 → 學生下單（純儲值／混合）→ QR 取餐 → 儲值抵欠款 → 匯出 CSV。
+
+---
+
+## 常見問題
+
+- **手機收不到通知？** ① 需用 Chrome／Edge 並允許通知權限；② iPhone 需 iOS 16.4+ 且加入主畫面；③ 檢查 VAPID 金鑰是否已設定；④ 通知只會送到「已開啟通知」的裝置。
+- **Email 寄不出去？** 檢查 Resend 網域驗證與 `EMAIL_FROM`；免費層每日 100 封上限。
+- **資料庫會休眠？** Supabase 免費層閒置 7 天才休眠；學生天天使用不會觸發，喚醒只要幾秒。
+- **免費配額夠嗎？** 一個班級（50 人）每天數百次 API 呼叫，遠低於免費層上限。

@@ -1,46 +1,39 @@
-# 班級訂午餐系統
+# 班級訂午餐系統 v2（Supabase 雲端版）
 
-手機優先的班級訂午餐、錢包與取餐核對系統。
+手機優先的班級訂午餐、儲值錢包與取餐核對系統。前端為原生 HTML + Vanilla JS（Vercel 靜態部署），
+後端為 **Supabase（PostgreSQL）**，通知使用 **Web Push（PWA 釘選到桌面）**，Email 僅用於驗證信與密碼重設信。
 
 ## 技術架構
-- 前端：原生 HTML + Tailwind CDN + Vanilla JS（`client/index.html` → `client/src/app.js`）
-- 後端資料：Google Apps Script + Google 試算表（`Code.gs`）
-- 部署：Vercel（靜態前端 + `api/gas.js` 同網域代理）
+
+```
+瀏覽器（Vercel 靜態前端，可釘選到桌面）
+   │ POST /api/gas（同一套 action 合約）
+   ▼
+Vercel Serverless 函式（api/gas.js、api/cron.js）
+   │
+   ▼
+Supabase PostgreSQL ──┬─ 金流原子運算（fn_settle_order / fn_topup / fn_settle_cash / fn_refund_order）
+                      ├─ 登入 Token、驗證碼、重設碼（資料庫只存雜湊）
+                      ├─ 推播訂閱（push_subscriptions）
+                      └─ pg_cron 每小時截止提醒 → /api/cron
+Email（Resend）：只有註冊驗證信、密碼重設信
+推播（Web Push／VAPID）：新場次開放、截止提醒、餐點可取餐
+```
 
 ## 資料夾結構
+
 | 路徑 | 說明 |
 | --- | --- |
-| `client/index.html` | 前端頁面與 UI 模板 |
-| `client/src/app.js`、`lunchDomain.js` | 前端主程式與業務邏輯 |
-| `client/public/images/` | 品牌圖片 |
-| `api/gas.js` | `/api/gas` 代理（轉送 Google Apps Script） |
-| `Code.gs` | Apps Script 後端（部署說明見 `GAS_DEPLOYMENT.md`） |
-| `vercel.json` | Vercel 建置設定 |
-
-## 功能亮點
-- 學生端：多場次訂餐（複選餐點／數量／客製選項）、動態 QR 憑證（取餐／結帳／儲值）、儲值錢包、**常點餐點一鍵重複點**、**截止倒數計時**、**餘額不足預警**、**訂單文字一鍵複製分享**。
-- 管理端：統計儀表板（**可搜尋／篩選訂單**）、掃碼核銷三通道（取餐／結帳／儲值）、店家與菜單管理、場次管理、帳號管理、CSV 匯出。
+| `client/` | 前端（index.html、src/app.js、PWA：manifest.json、sw.js、icons） |
+| `api/` | Vercel 函式：`gas.js`（主路由器）、`cron.js`（排程）、`_actions/*`（動作）、`_lib/*`（共用層） |
+| `supabase/schema.sql` | 資料庫 Schema＋金流函式＋pg_cron 排程範例 |
+| `scripts/` | `generate-vapid.js`（VAPID 金鑰）、`smoke-test.js`（上線測試） |
 
 ## 本機預覽
+
 ```bash
 npm install
 npm run dev
 ```
 
-## 部署到 Vercel
-1. 推到 GitHub：
-   ```bash
-   git init
-   git add .
-   git commit -m "初始版本"
-   git branch -M main
-   git remote add origin https://github.com/你的帳號/你的儲存庫.git
-   git push -u origin main
-   ```
-2. 到 [vercel.com/new](https://vercel.com/new) 匯入該儲存庫。
-3. 新增環境變數 `GAS_WEB_APP_URL` = 你的 Apps Script `/exec` 網址。
-4. 按 Deploy。
-
-## 注意
-- Apps Script「專案設定 → 指令碼屬性」的 `FRONTEND_URL` 要改為 Vercel 正式網址（影響「忘記密碼」信）。
-- 「常點餐點」只儲存在學生自己的裝置（localStorage），不佔用後端資料。
+完整建置步驟請見 **`SETUP_GUIDE.md`**。

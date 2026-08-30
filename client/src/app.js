@@ -34,7 +34,8 @@ const state = {
   scannerProcessing: false,
   confirmAction: null,
   countdownTimer: null,
-  closedSessionIds: new Set()
+  closedSessionIds: new Set(),
+  push: { supported: false, subscribed: false }
 };
 
 const ICONS = {
@@ -52,6 +53,8 @@ bootstrap();
 async function bootstrap() {
   state.countdownTimer = setInterval(updateLunchCountdowns, 1000);
   state.publicConfig = await loadPublicConfig();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  window.addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); deferredInstallPrompt = event; renderInstallButton(); });
   const resetToken = new URLSearchParams(location.search).get('resetToken');
   if (resetToken) {
     state.token = '';
@@ -410,12 +413,14 @@ async function renderWallet() {
   }
 }
 
-function renderSettings() {
+async function renderSettings() {
   $('#settings-avatar').textContent = initial(state.user.name);
   $('#settings-name').textContent = state.user.name;
   $('#settings-meta').textContent = `${state.user.studentNo} · ${state.user.email}`;
   $('#settings-balance').textContent = money(state.user.walletBalance);
   $('#settings-role').textContent = state.user.role === 'Admin' ? '管理員' : '學生';
+  await updateNotificationUI();
+  renderInstallButton();
 }
 
 function renderAdmin() {
@@ -575,6 +580,19 @@ async function onClick(event) {
     if (action === 'quick-add-favorite') { quickAddFavorite(state.selectedSessionId, button.dataset.itemId, (button.dataset.optionIds || '').split(',').filter(Boolean)); renderLunch(); return; }
     if (action === 'clear-favorites') { localStorage.removeItem('classLunch.favorites'); toast('已清空常點清單。', 'success'); renderLunch(); return; }
     if (action === 'copy-my-order') return copyMyOrder(button.dataset.sessionId);
+    if (action === 'toggle-notifications') {
+      const subscription = await currentPushSubscription();
+      if (subscription) return unsubscribeFromPush();
+      return subscribeToPush();
+    }
+    if (action === 'install-app') {
+      if (!deferredInstallPrompt) return toast('請使用瀏覽器選單的「安裝應用程式／釘選到桌面」。', 'success');
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      renderInstallButton();
+      return;
+    }
     if (action === 'admin-filter') { state.admin.orderFilter = button.dataset.filter || 'all'; renderDashboardOrderList(); return; }
     if (action === 'adjust-cart-quantity') { adjustCartQuantity(state.selectedSessionId, button.dataset.itemId, button.dataset.delta); renderLunch(); return; }
     if (action === 'verify-type') { state.verification.type = button.dataset.type; renderVerification(); return; }
@@ -995,8 +1013,103 @@ function renderDashboardOrderList() {
 function orderCard(order) {
   return `<article class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-sm font-black">${escapeHtml(order.seatNo)}號 ${escapeHtml(order.studentName)} <span class="font-normal text-slate-500">${escapeHtml(order.studentNo)}</span></p><p class="mt-1 text-sm text-ledger">${escapeHtml(order.itemName)}${order.selectedOptions.length ? ` · ${order.selectedOptions.map(x => escapeHtml(x.name)).join('、')}` : ''}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(order.storeName)}${order.note ? ` · 備註：${escapeHtml(order.note)}` : ''}</p></div><div class="text-right"><b class="block text-sm tabular-nums text-ledger">${money(order.totalPrice)}</b><div class="mt-2 flex flex-wrap justify-end gap-1">${paymentBadge(order.paymentStatus)}${pickupBadge(order.pickupStatus)}</div></div></div></article>`;
 }
+// ---- 推播通知（Web Push / PWA 釘選到桌面）----
+let deferredInstallPrompt = null;
+
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i += 1) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function currentPushSubscription() {
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    return await registration.pushManager.getSubscription();
+  } catch (_) { return null; }
+}
+
+function pushKeysOf(subscription) {
+  return {
+    endpoint: subscription.endpoint,
+    keys: {
+      p256dh: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('p256dh')))),
+      auth: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('auth')))),
+    },
+  };
+}
+
+async function subscribeToPush() {
+  if (!pushSupported()) return toast('此瀏覽器不支援推播通知；請改用 Chrome／Edge，並把網站釘選到桌面。', 'error');
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') { await updateNotificationUI(); return toast('通知權限未開啟，將無法收到提醒。', 'error'); }
+  const publicKey = state.publicConfig?.vapidPublicKey;
+  if (!publicKey) return toast('推播服務尚未設定（缺少 VAPID 金鑰）。', 'error');
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+    await api('pushSubscribe', { ...pushKeysOf(subscription), deviceLabel: `${navigator.platform || ''} ${/iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'iOS' : ''}`.trim() });
+    await updateNotificationUI();
+    toast('已開啟手機通知：新場次、截止與取餐提醒會直接送到這裡。', 'success');
+  } catch (error) {
+    await updateNotificationUI();
+    toast(error.message || '開啟通知失敗，請稍後再試。', 'error');
+  }
+}
+
+async function unsubscribeFromPush() {
+  const subscription = await currentPushSubscription();
+  if (subscription) {
+    try { await api('pushUnsubscribe', { endpoint: subscription.endpoint }); } catch (_) { /* 本機取消仍應完成。 */ }
+    await subscription.unsubscribe();
+  }
+  await updateNotificationUI();
+  toast('已關閉手機通知。', 'success');
+}
+
+async function updateNotificationUI() {
+  const status = $('#notification-status');
+  const sw = $('#notification-switch');
+  if (!status || !sw) return;
+  if (!pushSupported()) {
+    status.textContent = '此瀏覽器不支援（請用 Chrome／Edge 並釘選到桌面）';
+    sw.className = 'grid h-6 w-11 shrink-0 place-items-center rounded-full bg-slate-200 transition';
+    sw.innerHTML = '<span class="h-4 w-4 rounded-full bg-white shadow"></span>';
+    return;
+  }
+  const subscription = await currentPushSubscription();
+  const enabled = Boolean(subscription);
+  status.textContent = enabled ? '已開啟：新場次、截止與取餐提醒' : '未開啟：新場次、截止與取餐提醒';
+  sw.className = `grid h-6 w-11 shrink-0 place-items-center rounded-full transition ${enabled ? 'bg-stamp' : 'bg-slate-200'}`;
+  sw.innerHTML = `<span class="h-4 w-4 rounded-full bg-white shadow transition ${enabled ? 'translate-x-3' : ''}"></span>`;
+  // 同一裝置換人登入時，把訂閱對應到目前使用者
+  if (enabled && state.token) {
+    try { await api('pushSubscribe', { ...pushKeysOf(subscription), deviceLabel: '同步裝置訂閱' }); } catch (_) { /* 忽略 */ }
+  }
+}
+
+function renderInstallButton() {
+  const button = $('#install-app-button');
+  if (!button) return;
+  const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+  if (deferredInstallPrompt || standalone) {
+    button.classList.remove('hidden');
+    button.classList.add('flex');
+  }
+}
+
 async function api(action, data = {}, token = state.token, throwWhenUnconfigured = true) {
-  if (!apiConfigured()) { if (throwWhenUnconfigured) throw new Error('尚未設定 Google Apps Script API 網址。'); return {}; }
+  if (!apiConfigured()) { if (throwWhenUnconfigured) throw new Error('尚未連接後端服務。'); return {}; }
   const response = await fetch(window.LUNCH_CONFIG.apiUrl, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, data, token }) });
   if (!response.ok) throw new Error(`伺服器連線失敗（${response.status}）。`);
   let json; try { json = await response.json(); } catch (_) { throw new Error('伺服器回傳格式無法辨識，請確認 Web App 已部署為可存取。'); }
@@ -1030,7 +1143,7 @@ function pickupBadge(status) { return `<span class="status-stamp rounded-md px-2
 function emptyState(title, description) { return `<div class="rounded-[1.5rem] border border-dashed border-ledger/20 bg-white px-6 py-10 text-center"><p class="font-serif text-lg font-black text-ledger">${escapeHtml(title)}</p><p class="mt-2 text-sm leading-6 text-slate-500">${escapeHtml(description)}</p></div>`; }
 function errorBlock(text) { return `<div class="rounded-xl border border-red-100 bg-red-50 p-4 text-sm leading-6 text-red-700">${escapeHtml(text)}</div>`; }
 function skeletonLines(count) { return `<div class="space-y-3">${Array.from({length: count}, () => '<div class="h-16 animate-pulse rounded-xl bg-slate-100"></div>').join('')}</div>`; }
-function configNote() { return !apiConfigured() ? '<div class="mt-4 rounded-xl border border-apricot/30 bg-[#FFF6E8] px-3 py-2.5 text-xs leading-5 text-[#885A1C]">目前為介面預覽。請先在 <code>index.html</code> 設定 Apps Script API 網址。</div>' : ''; }
+function configNote() { return !apiConfigured() ? '<div class="mt-4 rounded-xl border border-apricot/30 bg-[#FFF6E8] px-3 py-2.5 text-xs leading-5 text-[#885A1C]">目前為介面預覽。請確認後端服務（/api/gas）已部署。</div>' : ''; }
 function toast(message, type = 'success') { let root = $('#toast-root'); if (!root) { root = document.createElement('div'); root.id = 'toast-root'; root.className = 'pointer-events-none fixed inset-x-0 top-4 z-[70] mx-auto flex max-w-sm flex-col gap-2 px-4'; document.body.appendChild(root); } const item = document.createElement('div'); item.className = `pointer-events-auto rounded-xl px-4 py-3 text-sm font-bold text-white shadow-lift ${type === 'error' ? 'bg-red-700' : 'bg-ledger'}`; item.textContent = message; root.appendChild(item); setTimeout(() => item.remove(), 3500); }
 function setOperationLock(locked) {
   state.operationPending = locked;
