@@ -697,7 +697,7 @@ async function onClick(event) {
     if (action === 'remove-admin') return confirmAdminRoleChange(button.dataset.id, 'Student');
     if (action === 'developer-check-email') return developerCheckEmail();
     if (action === 'developer-broadcast') return developerBroadcast();
-    if (action === 'developer-maintenance') return developerSetMaintenance(button.dataset.enabled === 'true');
+    if (action === 'developer-maintenance') return developerSetMaintenance(button.dataset.enabled === 'true', button);
     if (action === 'developer-resend-verify') return developerResendVerificationCode();
     if (action === 'developer-delete-developer') return confirmDeveloperDelete(button.dataset.id);
     if (action === 'developer-refresh-menu') return renderDeveloperMenu($('#developer-content'));
@@ -1316,8 +1316,8 @@ async function developerBroadcast() {
   });
 }
 
-async function developerSetMaintenance(enabled) {
-  await busy($('#developer-maintenance'), async () => {
+async function developerSetMaintenance(enabled, button = null) {
+  await busy(button || $('#developer-maintenance'), async () => {
     await developerApi('developerSetMaintenance', { enabled });
     toast(enabled ? '已開啟維修模式。' : '維修模式已關閉。', 'success');
     await refreshDeveloperData();
@@ -1413,7 +1413,7 @@ function setOperationLock(locked) {
     else if (control.dataset.operationDisabled !== undefined) { control.disabled = control.dataset.operationDisabled === 'true'; delete control.dataset.operationDisabled; }
   });
 }
-async function busy(element, task) { if (state.operationPending) return; const button = element?.matches?.('button') ? element : $('button[type="submit"]', element); const original = button ? button.innerHTML : ''; setOperationLock(true); if (button) { button.dataset.busy = 'true'; button.innerHTML = '處理中…'; } try { await task(); } catch (error) { toast(error.message || '系統暫時無法完成此操作。', 'error'); } finally { if (button && document.body.contains(button)) { button.innerHTML = original; delete button.dataset.busy; } setOperationLock(false); } }
+async function busy(element, task) { if (state.operationPending) return; const button = element?.matches?.('button') ? element : (element ? $('button[type="submit"]', element) : null); const original = button ? button.innerHTML : ''; setOperationLock(true); if (button) { button.dataset.busy = 'true'; button.innerHTML = '處理中…'; } try { await task(); } catch (error) { toast(error.message || '系統暫時無法完成此操作。', 'error'); } finally { if (button && document.body.contains(button)) { button.innerHTML = original; delete button.dataset.busy; } setOperationLock(false); } }
 function orderCanBeChanged(session, order) { return new Date(session.cutoffTime) > new Date() && order.pickupStatus !== 'PickedUp' && order.paymentStatus !== 'PaidCash'; }
 function escapeHtml(value) { return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 function escapeAttr(value) { return escapeHtml(value).replace(/`/g,'&#096;'); }
