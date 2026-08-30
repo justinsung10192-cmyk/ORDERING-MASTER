@@ -560,3 +560,6 @@ begin
     values (p_class_id, p_user_id, null, p_amount, 'Manual', coalesce(p_note, '手動調整'));
   return jsonb_build_object('wallet_balance', v_balance);
 end; $$;
+
+-- 店家審核：核准後自動建立共用店家
+alter table public.merchants add column if not exists is_approved boolean not null default false;

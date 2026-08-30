@@ -40,6 +40,7 @@ const state = {
   merchant: null,
   merchantToken: '',
   merchantTab: 'orders',
+  merchantPendingEmail: '',
   classAdminApplication: null
 };
 
@@ -257,7 +258,8 @@ function renderClassAdminApplyForm() {
 }
 
 function renderClassAdminVerifyForm() {
-  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">CLASS ADMIN APPLY · VERIFY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">驗證申請信箱</h1><p class="mt-2 text-sm leading-6 text-slate-500">6位數驗證碼已寄到申請信箱（15分鐘內有效）。</p>${configNote()}<form id="class-admin-verify-form" class="task-rule mt-6 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">申請信箱</span><input name="email" type="email" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">6位數驗證碼</span><input name="code" inputmode="numeric" required pattern="[0-9]{6}" maxlength="6" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-center font-serif text-2xl font-black tracking-[.35em] outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證並送出申請</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="classAdminApply" class="font-bold text-apricot underline underline-offset-4">重新填寫申請</button><button data-auth="login" class="font-bold text-ledger underline underline-offset-4">←回到登入</button></div>`;
+  const prefilledEmail = String(state.classAdminApplication?.email || '');
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">CLASS ADMIN APPLY · VERIFY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">驗證申請信箱</h1><p class="mt-2 text-sm leading-6 text-slate-500">6位數驗證碼已寄到申請信箱（15分鐘內有效）。</p>${configNote()}<form id="class-admin-verify-form" class="task-rule mt-6 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">申請信箱</span><input name="email" type="email" required value="${escapeAttr(prefilledEmail)}" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">6位數驗證碼</span><input name="code" inputmode="numeric" required pattern="[0-9]{6}" maxlength="6" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-center font-serif text-2xl font-black tracking-[.35em] outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證並送出申請</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="classAdminApply" class="font-bold text-apricot underline underline-offset-4">重新填寫申請</button><button data-auth="login" class="font-bold text-ledger underline underline-offset-4">←回到登入</button></div>`;
 }
 
 function renderMerchantLoginForm() {
@@ -269,7 +271,8 @@ function renderMerchantRegisterForm() {
 }
 
 function renderMerchantVerifyForm() {
-  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-stamp">MERCHANT VERIFY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">驗證店家信箱</h1><p class="mt-2 text-sm leading-6 text-slate-500">6位數驗證碼已寄到你的 Email（15分鐘內有效）。</p>${configNote()}<form id="merchant-verify-form" class="task-rule mt-6 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">Email</span><input name="email" type="email" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">6位數驗證碼</span><input name="code" inputmode="numeric" required pattern="[0-9]{6}" maxlength="6" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-center font-serif text-2xl font-black tracking-[.35em] outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-stamp px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證並前往登入</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="merchantRegister" class="font-bold text-apricot underline underline-offset-4">重新註冊</button><button data-auth="merchantLogin" class="font-bold text-ledger underline underline-offset-4">←回到店家登入</button></div>`;
+  const prefilledEmail = String(state.merchantPendingEmail || '');
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-stamp">MERCHANT VERIFY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">驗證店家信箱</h1><p class="mt-2 text-sm leading-6 text-slate-500">6位數驗證碼已寄到你的 Email（15分鐘內有效）。</p>${configNote()}<form id="merchant-verify-form" class="task-rule mt-6 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">Email</span><input name="email" type="email" required value="${escapeAttr(prefilledEmail)}" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">6位數驗證碼</span><input name="code" inputmode="numeric" required pattern="[0-9]{6}" maxlength="6" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-center font-serif text-2xl font-black tracking-[.35em] outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-stamp px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證並前往登入</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="merchantRegister" class="font-bold text-apricot underline underline-offset-4">重新註冊</button><button data-auth="merchantLogin" class="font-bold text-ledger underline underline-offset-4">←回到店家登入</button></div>`;
 }
 
 function schoolSelectHtml(name = 'schoolId', required = true) {
@@ -740,6 +743,7 @@ async function onClick(event) {
   if (action === 'developer-approve-application') return confirmApplicationApprove(button.dataset.id);
   if (action === 'developer-reject-application') return confirmApplicationReject(button.dataset.id);
   if (action === 'developer-toggle-merchant') return developerToggleMerchant(button.dataset.id, button.dataset.disabled === 'true');
+  if (action === 'developer-approve-merchant') return confirmMerchantApprove(button.dataset.id);
     if (action === 'developer-refresh') return refreshDeveloperData();
     if (action === 'developer-create-code') return createDeveloperClassAdminCode();
     if (action === 'developer-revoke-code') return confirmDeveloperCodeRevoke(button.dataset.id);
@@ -883,7 +887,7 @@ async function submitMerchantLogin(form) {
 async function submitMerchantRegister(form) {
   const data = formData(form);
   if (!passwordsMatch(data.password, data.confirmPassword)) return toast('兩次輸入的密碼不一致。', 'error');
-  await busy(form, async () => { const result = await api('merchantRegister', data); if (result.authorizationCode) window.__lastMerchantCode = result.authorizationCode; state.authMode = 'merchantVerify'; renderAuth(); toast(`${result.message || '請完成信箱驗證。'}${result.authorizationCode ? ' 店家授權碼：' + result.authorizationCode + '（請妥善保存，用於綁定店家）' : ''}`, 'success'); });
+  await busy(form, async () => { const result = await api('merchantRegister', data); state.merchantPendingEmail = data.email; state.authMode = 'merchantVerify'; renderAuth(); toast(result.message || '請完成信箱驗證。', 'success'); });
 }
 
 async function submitMerchantVerify(form) {
@@ -925,7 +929,7 @@ async function renderMerchantOrders(root) {
   root.innerHTML = `${skeletonLines(4)}`;
   try {
     const data = await merchantApi('merchantGetDashboard');
-    if (!data.store) { root.innerHTML = emptyState('尚未綁定店家', '請向班級管理者索取「店家合作授權碼」，由管理者在店家資訊中綁定。'); return; }
+    if (!data.store) { root.innerHTML = data.pendingApproval ? emptyState('店家待審核', '你的店家帳號已送出審核，核准後即可開始接單（開發者核准後會自動開設店家）。') : emptyState('尚未開設店家', '開發者核准後會自動建立店家並加入場次選擇。'); return; }
     const orders = data.orders || [];
     const today = toDateInput(new Date());
     const todayOrders = orders.filter(order => order.orderDate === today);
@@ -942,7 +946,7 @@ async function renderMerchantMenu(root) {
   root.innerHTML = `${skeletonLines(4)}`;
   try {
     const data = await merchantApi('merchantGetMenu');
-    if (!data.store) { root.innerHTML = emptyState('尚未綁定店家', '請向班級管理者索取授權碼並綁定。'); return; }
+    if (!data.store) { root.innerHTML = data.pendingApproval ? emptyState('店家待審核', '核准後即可管理菜單。') : emptyState('尚未開設店家', '開發者核准後會自動建立店家。'); return; }
     const store = data.store;
     const items = data.items || [];
     const options = data.options || [];
@@ -954,7 +958,7 @@ async function renderMerchantSettings(root) {
   root.innerHTML = `${skeletonLines(4)}`;
   try {
     const data = await merchantApi('merchantGetMenu');
-    if (!data.store) { root.innerHTML = emptyState('尚未綁定店家', '請向班級管理者索取授權碼並綁定。'); return; }
+    if (!data.store) { root.innerHTML = data.pendingApproval ? emptyState('店家待審核', '核准後即可修改店家設定。') : emptyState('尚未開設店家', '開發者核准後會自動建立店家。'); return; }
     const store = data.store;
     root.innerHTML = `<form id="merchant-settings-form" class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">STORE SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black">店家設定</h2><div class="mt-4 space-y-3"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家名稱</span><input name="name" required maxlength="60" value="${escapeAttr(store.name)}" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger"/></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">營業時間</span><input name="businessHours" maxlength="60" value="${escapeAttr(store.businessHours)}" placeholder="例如 11:00–13:30" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger"/></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家簡介</span><textarea name="description" maxlength="200" rows="2" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger">${escapeHtml(store.description || '')}</textarea></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">聯絡資訊</span><input name="contact" maxlength="120" value="${escapeAttr(store.contact)}" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger"/></label><button data-action="merchant-toggle-ordering" class="w-full rounded-xl px-4 py-3.5 text-sm font-bold text-white ${store.orderingOpen ? 'bg-red-700' : 'bg-stamp'}">${store.orderingOpen ? '暫停訂購（學生將無法下單）' : '開啟訂購（學生可下單）'}</button><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white" type="submit">儲存店家設定</button></div></form>`;
   } catch (error) { root.innerHTML = errorBlock(error.message); }
@@ -1638,6 +1642,10 @@ async function developerToggleMerchant(merchantId, isDisabled) {
   await busy($('#developer-content'), async () => { await developerApi('developerSetMerchantDisabled', { merchantId, isDisabled }); toast(isDisabled ? '店家帳號已停用。' : '店家帳號已恢復。', 'success'); renderDeveloperMerchants($('#developer-content')); });
 }
 
+function confirmMerchantApprove(merchantId) {
+  openConfirmModal({ eyebrow: 'APPROVE MERCHANT', title: '核准此店家？', body: '<p>核准後系統會自動為店家建立共用店家，並<strong>直接加入所有班級的場次店家選擇清單</strong>。</p>', submitLabel: '核准店家', onConfirm: async () => { const result = await developerApi('developerApproveMerchant', { merchantId }); closeModal(); toast(result.message || '店家已核准。', 'success'); renderDeveloperMerchants($('#developer-content')); } });
+}
+
 async function renderDeveloperSchools(root) {
   root.innerHTML = `<section class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SCHOOLS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">學校管理</h2><p class="mt-2 text-xs leading-5 text-slate-500">學校清單會出現在註冊、登入與申請介面；全體菜單可設定為學校專屬。</p></div><button data-action="developer-refresh" class="shrink-0 rounded-xl bg-mist px-3 py-2.5 text-xs font-bold text-ledger">重新整理</button></div><form id="school-form-dev" class="mt-4 rounded-xl bg-mist p-3"><p class="text-xs font-black text-ledger">新增／編輯學校</p><div class="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2"><input name="schoolId" type="hidden"/><input name="name" required maxlength="80" class="min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="學校名稱"/><input name="emailDomain" maxlength="80" class="min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="Email後綴（選填）"/><button class="rounded-lg bg-ledger px-3 text-xs font-bold text-white">儲存</button></div></form><div id="school-list" class="mt-4 space-y-2">${skeletonLines(2)}</div></section>`;
   try {
@@ -1658,7 +1666,7 @@ async function renderDeveloperMerchants(root) {
   root.innerHTML = `<section class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.13em] text-stamp">MERCHANTS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">店家合作帳號</h2><p class="mt-2 text-xs leading-5 text-slate-500">店家可自行管理菜單與訂單；開發者可在此停用或恢復店家帳號。</p></div><button data-action="developer-refresh" class="shrink-0 rounded-xl bg-mist px-3 py-2.5 text-xs font-bold text-ledger">重新整理</button></div><div id="merchant-list" class="mt-4 space-y-2">${skeletonLines(3)}</div></section>`;
   try {
     const merchants = await developerApi('developerListMerchants');
-    $('#merchant-list').innerHTML = merchants.length ? merchants.map(merchant => `<div class="flex items-center justify-between rounded-xl border border-ledger/10 bg-mist/40 px-3 py-2.5"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(merchant.merchantName)}</p><p class="mt-0.5 truncate text-[11px] text-slate-500">${escapeHtml(merchant.ownerName)} · ${escapeHtml(merchant.ownerPhone)} · ${escapeHtml(merchant.email)}${merchant.emailVerified ? '' : ' ·未驗證'}</p><p class="mt-0.5 text-[11px] text-slate-400">綁定店家：${escapeHtml(merchant.storeName || '尚未綁定')}${merchant.isDisabled ? ' ·已停用' : ''}</p></div><button data-action="developer-toggle-merchant" data-id="${escapeAttr(merchant.merchantId)}" data-disabled="${merchant.isDisabled ? 'false' : 'true'}" class="shrink-0 rounded-lg px-2.5 py-2 text-[11px] font-bold ${merchant.isDisabled ? 'bg-stamp/10 text-stamp' : 'bg-red-50 text-red-700'}">${merchant.isDisabled ? '恢復' : '停用'}</button></div>`).join('') : emptyState('尚無店家帳號', '店家在登入頁「店家合作」註冊後會出現在這裡。');
+    $('#merchant-list').innerHTML = merchants.length ? merchants.map(merchant => `<div class="flex items-center justify-between rounded-xl border border-ledger/10 bg-mist/40 px-3 py-2.5"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(merchant.merchantName)} ${merchant.isApproved ? '<span class="ml-1 rounded bg-stamp/10 px-1.5 py-0.5 text-[9px] font-bold text-stamp">已核准</span>' : '<span class="ml-1 rounded bg-apricot/15 px-1.5 py-0.5 text-[9px] font-bold text-apricot">待審核</span>'}</p><p class="mt-0.5 truncate text-[11px] text-slate-500">${escapeHtml(merchant.ownerName)} · ${escapeHtml(merchant.ownerPhone)} · ${escapeHtml(merchant.email)}${merchant.emailVerified ? '' : ' ·未驗證'}</p><p class="mt-0.5 text-[11px] text-slate-400">店家：${escapeHtml(merchant.storeName || '尚未開店')}${merchant.isDisabled ? ' ·已停用' : ''}</p></div><div class="flex shrink-0 flex-col gap-1.5">${merchant.isApproved ? '' : `<button data-action="developer-approve-merchant" data-id="${escapeAttr(merchant.merchantId)}" ${merchant.emailVerified ? '' : 'disabled'} class="rounded-lg bg-ledger px-2.5 py-2 text-[11px] font-bold text-white disabled:opacity-40">核准</button>`}<button data-action="developer-toggle-merchant" data-id="${escapeAttr(merchant.merchantId)}" data-disabled="${merchant.isDisabled ? 'false' : 'true'}" class="rounded-lg px-2.5 py-2 text-[11px] font-bold ${merchant.isDisabled ? 'bg-stamp/10 text-stamp' : 'bg-red-50 text-red-700'}">${merchant.isDisabled ? '恢復' : '停用'}</button></div></div>`).join('') : emptyState('尚無店家帳號', '店家在登入頁「店家合作」註冊後會出現在這裡。');
   } catch (error) { $('#merchant-list').innerHTML = errorBlock(error.message); }
 }
 

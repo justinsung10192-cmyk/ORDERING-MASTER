@@ -55,7 +55,6 @@ export const actions = {
     const existing = await findOne('merchants', { email });
     if (existing) throw appError('DUPLICATE', '此信箱已註冊店家帳號。');
     const { salt, hash } = createPassword(password);
-    const authorizationCode = randomBytes(8).toString('hex').toUpperCase();
     const merchant = await insertRow('merchants', {
       merchant_name: merchantName,
       address,
@@ -65,7 +64,6 @@ export const actions = {
       email,
       password_hash: hash,
       salt,
-      authorization_code_hash: sha256Hex(authorizationCode),
     });
     const code = randomDigits(6);
     await insertRow('auth_tokens', {
@@ -75,7 +73,7 @@ export const actions = {
       expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     });
     const delivery = await sendMail({ to: email, subject: '【訂餐通】店家信箱驗證碼', html: verificationEmailHtml(code) });
-    return { message: '店家帳號已建立，請先完成信箱驗證（驗證碼已寄出），再登入。', delivery, authorizationCode };
+    return { message: '店家帳號已建立，請先完成信箱驗證（驗證碼已寄出），再登入。', delivery };
   },
 
   async merchantVerifyEmail(data) {
@@ -107,7 +105,9 @@ export const actions = {
 
   async merchantGetDashboard(_data, ctx) {
     const store = await loadMerchantStore(ctx.merchant.id);
-    if (!store) return { store: null, orders: [] };
+    if (!store) {
+      return { store: null, pendingApproval: !ctx.merchant.is_approved, orders: [] };
+    }
     const { data: sessions } = await supabase.from('sessions').select('*').eq('store_id', store.id);
     const sessionIds = (sessions || []).map(session => session.id);
     const orders = sessionIds.length ? await listRowsIn('orders', 'session_id', sessionIds) : [];
@@ -152,7 +152,9 @@ export const actions = {
 
   async merchantGetMenu(_data, ctx) {
     const store = await loadMerchantStore(ctx.merchant.id);
-    if (!store) return { store: null, items: [], options: [] };
+    if (!store) {
+      return { store: null, pendingApproval: !ctx.merchant.is_approved, items: [], options: [] };
+    }
     const items = await listRows('menu_items', { classId: store.class_id, filters: { store_id: store.id }, order: 'sort_order' });
     const options = items.length ? await listRowsIn('item_options', 'menu_item_id', items.map(item => item.id), { classId: store.class_id }) : [];
     return {

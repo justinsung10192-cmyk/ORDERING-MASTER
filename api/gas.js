@@ -75,6 +75,7 @@ const DEVELOPER = new Set([
   'developerRejectApplication',
   'developerListMerchants',
   'developerSetMerchantDisabled',
+  'developerApproveMerchant',
 ]);
 
 const MERCHANT = new Set(['merchantLogout', 'merchantGetDashboard', 'merchantGetMenu', 'merchantSaveStore', 'merchantSaveMenuItem', 'merchantSaveItemOption', 'merchantDeleteMenuItem', 'merchantDeleteItemOption']);

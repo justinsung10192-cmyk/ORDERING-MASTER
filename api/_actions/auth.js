@@ -1,11 +1,12 @@
 // 動作：公開設定、註冊、驗證、登入、密碼重設、升級管理員、Bootstrap
+import { randomBytes } from 'node:crypto';
 import { appError, sid, num, sha256Hex, randomDigits } from '../_lib/util.js';
 import { supabase, findOne, insertRow, updateRows, deleteRows, getAppSetting } from '../_lib/db.js';
 import {
   verifyPassword, createPassword, createSession, destroySession, bumpAuthVersion,
   issueEmailCode, consumeEmailCode, findOrCreateClass,
 } from '../_lib/auth.js';
-import { sendMail, verificationEmailHtml, resetEmailHtml } from '../_lib/mail.js';
+import { sendMail, verificationEmailHtml, resetLinkEmailHtml } from '../_lib/mail.js';
 import { getVapidPublicKey } from '../_lib/push.js';
 import { publicUser, loadOpenSessions } from '../_lib/serialize.js';
 
@@ -122,10 +123,18 @@ export const actions = {
     const user = await findOne('users', { student_no: cleanStudentNo(data.studentNo) });
     if (user && !user.is_disabled && user.email) {
       await deleteRows('auth_tokens', { user_id: user.id, type: 'Reset' });
-      const code = await issueEmailCode(user, 'Reset');
-      await sendMail({ to: user.email, subject: '【班級訂午餐】密碼重設碼', html: resetEmailHtml(code) });
+      const token = randomBytes(24).toString('hex');
+      await insertRow('auth_tokens', {
+        class_id: user.class_id,
+        user_id: user.id,
+        type: 'Reset',
+        token_hash: sha256Hex(token),
+        expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      });
+      const appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+      await sendMail({ to: user.email, subject: '【班級訂午餐】密碼重設連結', html: resetLinkEmailHtml({ link: `${appUrl}/?resetToken=${token}` }) });
     }
-    return { message: '若此學號存在，重設碼已寄至登記信箱。' };
+    return { message: '若此學號存在，重設連結已寄至登記信箱。' };
   },
 
   async resetPassword(data) {

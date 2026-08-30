@@ -344,7 +344,8 @@ export const actions = {
       ownerPhone: merchant.owner_phone,
       isDisabled: Boolean(merchant.is_disabled),
       emailVerified: Boolean(merchant.email_verified),
-      storeName: storeByMerchant.get(String(merchant.id))?.name || '尚未綁定店家',
+      isApproved: Boolean(merchant.is_approved),
+      storeName: storeByMerchant.get(String(merchant.id))?.name || '尚未開店',
     }));
   },
 
@@ -353,6 +354,28 @@ export const actions = {
     if (!merchant) throw appError('NOT_FOUND', '找不到店家帳號。');
     await updateRows('merchants', { id: merchant.id }, { is_disabled: Boolean(data.isDisabled) });
     return { ok: true };
+  },
+
+  async developerApproveMerchant(data) {
+    const merchant = await findOne('merchants', { id: Number(data.merchantId) });
+    if (!merchant) throw appError('NOT_FOUND', '找不到店家帳號。');
+    if (merchant.is_disabled) throw appError('INVALID_INPUT', '此店家帳號已停用，無法核准。');
+    if (!merchant.email_verified) throw appError('INVALID_INPUT', '店家尚未完成信箱驗證，無法核准。');
+    const existingStore = await findOne('stores', { merchant_id: merchant.id });
+    if (!existingStore) {
+      await insertRow('stores', {
+        class_id: 'global',
+        name: merchant.merchant_name,
+        description: merchant.address || '',
+        contact: merchant.phone || merchant.owner_phone || '',
+        is_global: true,
+        scope: 'all',
+        merchant_id: merchant.id,
+        business_hours: '',
+      });
+    }
+    await updateRows('merchants', { id: merchant.id }, { is_approved: true });
+    return { ok: true, message: '已核准，店家已自動加入場次的店家選擇清單。' };
   },
 
   async developerDeleteStore(data) {
