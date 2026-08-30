@@ -3,6 +3,10 @@
 -- 在 Supabase 專案的「SQL Editor」整段貼上並執行即可。
 -- ============================================================
 
+-- 啟用擴充：pg_cron（排程）＋ pg_net（讓排程呼叫 HTTP 端點）
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
 -- 班級 ------------------------------------------------------------------
 create table if not exists public.classes (
   id         bigint generated always as identity primary key,
@@ -443,6 +447,8 @@ $$;
 
 -- ============================================================
 -- 排程：截止提醒（選用）——部署完成後在 SQL Editor 執行並替換網址：
+--   create extension if not exists pg_cron;
+--   create extension if not exists pg_net;
 --   select cron.schedule(
 --     'cutoff-reminders',
 --     '0 * * * *',

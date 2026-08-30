@@ -1,0 +1,1 @@
+schema.sql 與 SETUP_GUIDE 補上 pg_cron / pg_net 擴充啟用步驟

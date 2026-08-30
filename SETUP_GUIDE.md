@@ -71,6 +71,11 @@ npm run generate:vapid
 部署完成後，到 Supabase **SQL Editor** 執行（把網址與 CRON_SECRET 換成你的）：
 
 ```sql
+-- 先啟用擴充（只需一次）
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+-- 再建立排程
 select cron.schedule(
   'cutoff-reminders',
   '0 * * * *',
@@ -81,6 +86,9 @@ select cron.schedule(
      ) $$
 );
 ```
+
+> 若報 `schema "cron" does not exist`：表示 pg_cron 未啟用，先執行上面的 `create extension` 再試。
+> 若報 `schema "net" does not exist`：表示 pg_net 未啟用，同樣先執行 `create extension`。
 
 移除排程：`select cron.unschedule('cutoff-reminders');`
 
