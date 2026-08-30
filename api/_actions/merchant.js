@@ -112,7 +112,7 @@ export const actions = {
     const sessionIds = (sessions || []).map(session => session.id);
     const orders = sessionIds.length ? await listRowsIn('orders', 'session_id', sessionIds) : [];
     const sessionById = new Map((sessions || []).map(session => [String(session.id), session]));
-    const userIds = [...new Set(orders.map(order => String(order.user_id)).filter(Boolean))];
+    const userIds = [...new Set(orders.map(order => order.user_id).filter(value => value !== null && value !== undefined))];
     const users = userIds.length
       ? await supabase.from('users').select('id, student_name, seat_no').in('id', userIds.map(Number)).then(result => result.data || [])
       : [];

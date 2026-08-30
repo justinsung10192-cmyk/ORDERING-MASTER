@@ -11,7 +11,7 @@ export const actions = {
     const date = String(data.orderDate || todayString());
     const sessions = await listRows('sessions', { classId, filters: { order_date: date }, order: 'cutoff_time' });
     const orders = sessions.length ? await listRowsIn('orders', 'session_id', sessions.map(session => session.id), { classId }) : [];
-    const userIds = [...new Set(orders.map(order => String(order.user_id)).filter(Boolean))];
+    const userIds = [...new Set(orders.map(order => order.user_id).filter(value => value !== null && value !== undefined))];
     const users = userIds.length ? await listRowsIn('users', 'id', userIds.map(Number), { classId }) : [];
     const userById = new Map(users.map(user => [String(user.id), user]));
     const storeById = new Map((await listStoresForClass(ctx.classId)).map(store => [String(store.id), store]));

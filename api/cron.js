@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     let reminded = 0;
     for (const session of sessions || []) {
       const orders = await listRowsIn('orders', 'session_id', [session.id], { classId: session.class_id });
-      const userIds = [...new Set(orders.map(order => String(order.user_id)).filter(Boolean))];
+      const userIds = [...new Set(orders.map(order => order.user_id).filter(value => value !== null && value !== undefined))];
       const store = await findOne('stores', { id: session.store_id }, session.class_id);
       const time = new Date(session.cutoff_time);
       const timeText = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
