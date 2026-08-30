@@ -1,0 +1,1 @@
+修正統計介面份數顯示 undefined（item.quantity 改為後端回傳的 totalQuantity）
