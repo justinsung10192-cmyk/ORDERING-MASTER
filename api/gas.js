@@ -11,6 +11,7 @@ import { actions as verificationActions } from './_actions/verification.js';
 import { actions as sessionsActions } from './_actions/sessions.js';
 import { actions as adminActions } from './_actions/admin.js';
 import { actions as developerActions } from './_actions/developer.js';
+import { actions as merchantActions, validateMerchantSession } from './_actions/merchant.js';
 import { actions as pushActions } from './_actions/push.js';
 
 const HANDLERS = {
@@ -36,6 +37,11 @@ const PUBLIC = new Set([
   'developerRegister',
   'developerVerifyEmail',
   'developerResendVerification',
+  'applyClassAdmin',
+  'verifyClassAdminApplication',
+  'merchantLogin',
+  'merchantRegister',
+  'merchantVerifyEmail',
 ]);
 
 const DEVELOPER = new Set([
@@ -61,7 +67,16 @@ const DEVELOPER = new Set([
   'developerSaveItemOption',
   'developerDeleteMenuItem',
   'developerDeleteItemOption',
+  'developerListSchools',
+  'developerSaveSchool',
+  'developerListApplications',
+  'developerApproveApplication',
+  'developerRejectApplication',
+  'developerListMerchants',
+  'developerSetMerchantDisabled',
 ]);
+
+const MERCHANT = new Set(['merchantLogout', 'merchantGetDashboard', 'merchantGetMenu', 'merchantSaveStore', 'merchantSaveMenuItem', 'merchantSaveItemOption', 'merchantDeleteMenuItem', 'merchantDeleteItemOption']);
 
 const ADMIN = new Set([
   'getAdminDashboard',
@@ -115,6 +130,8 @@ export default async function handler(req, res) {
       if (maintenance && !devPublic && action !== 'getPublicConfig') throw appError('MAINTENANCE', '系統維修中，請稍後再來。');
     } else if (DEVELOPER.has(action)) {
       ctx.developer = await validateDeveloperSession(token);
+    } else if (MERCHANT.has(action)) {
+      ctx.merchant = await validateMerchantSession(token);
     } else {
       if (maintenance) throw appError('MAINTENANCE', '系統維修中，請稍後再來。');
       ctx.user = await validateSession(token);

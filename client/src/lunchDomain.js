@@ -2,7 +2,7 @@ export function passwordsMatch(password, confirmation) {
   return typeof password === "string" && password.length > 0 && password === confirmation;
 }
 
-const AUTH_MODES = new Set(["login", "register", "verifyEmail", "forgot", "reset", "developerLogin", "developerRegister", "developerVerify"]);
+const AUTH_MODES = new Set(["login", "register", "verifyEmail", "forgot", "reset", "developerLogin", "developerRegister", "developerVerify", "classAdminApply", "classAdminVerify", "merchantLogin", "merchantRegister", "merchantVerify"]);
 
 export function resolveAuthMode(requestedMode) {
   return AUTH_MODES.has(requestedMode) ? requestedMode : "login";

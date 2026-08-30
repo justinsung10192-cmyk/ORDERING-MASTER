@@ -1,7 +1,7 @@
 // 動作：開發者工作台（班級管理者代碼、跨班級帳號管理、系統設定）
 import { randomBytes } from 'node:crypto';
 import { appError, sid, num, sha256Hex, randomDigits } from '../_lib/util.js';
-import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting } from '../_lib/db.js';
+import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting, throwDb } from '../_lib/db.js';
 import { verifyPassword, createPassword, createDeveloperSession, destroySession, bumpAuthVersion, createClassAdminCodeValue } from '../_lib/auth.js';
 import { mailConfigured, sendMail, verificationEmailHtml, developerLoginAlertHtml } from '../_lib/mail.js';
 import { sendPushToAll } from '../_lib/push.js';
@@ -220,8 +220,20 @@ export const actions = {
     if (error) throw new Error('讀取全體菜單失敗。');
     const items = stores.length ? await listRowsIn('menu_items', 'store_id', stores.map(store => store.id)) : [];
     const options = items.length ? await listRowsIn('item_options', 'menu_item_id', items.map(item => item.id)) : [];
+    const schoolIds = [...new Set(stores.map(store => store.school_id).filter(Boolean))];
+    const schools = schoolIds.length ? await listRowsIn('schools', 'id', schoolIds) : [];
+    const schoolById = new Map(schools.map(school => [String(school.id), school]));
     return {
-      stores: stores.map(store => ({ storeId: sid(store.id), name: store.name, description: store.description || '', contact: store.contact || '', isActive: store.is_active })),
+      stores: stores.map(store => ({
+        storeId: sid(store.id),
+        name: store.name,
+        description: store.description || '',
+        contact: store.contact || '',
+        scope: store.scope || 'all',
+        schoolId: sid(store.school_id),
+        schoolName: (store.school_id && schoolById.get(String(store.school_id))?.name) || '',
+        isActive: store.is_active,
+      })),
       items: items.map(item => ({ storeId: sid(item.store_id), itemId: sid(item.id), name: item.name, basePrice: num(item.price) })),
       options: options.map(option => ({ itemId: sid(option.menu_item_id), optionId: sid(option.id), name: option.name, priceAdjustment: num(option.price), maxSelect: num(option.max_select) })),
     };
@@ -233,13 +245,107 @@ export const actions = {
     if (!name) throw appError('INVALID_INPUT', '請輸入店家名稱。');
     const description = String(data.description || '').trim().slice(0, 200);
     const contact = String(data.contact || '').trim().slice(0, 120);
+    const scope = String(data.scope || 'all') === 'school' ? 'school' : 'all';
+    const schoolId = scope === 'school' ? (Number(data.schoolId) || null) : null;
+    if (scope === 'school' && !schoolId) throw appError('INVALID_INPUT', '學校專屬菜單需選擇學校。');
     if (storeId) {
       const store = await findOne('stores', { id: storeId });
       if (!store || !store.is_global) throw appError('NOT_FOUND', '全體店家不存在。');
-      await updateRows('stores', { id: store.id }, { name, description, contact });
+      await updateRows('stores', { id: store.id }, { name, description, contact, scope, school_id: schoolId });
     } else {
-      await insertRow('stores', { class_id: 'global', name, description, contact, is_global: true });
+      await insertRow('stores', { class_id: 'global', name, description, contact, is_global: true, scope, school_id: schoolId });
     }
+    return { ok: true };
+  },
+
+  async developerListSchools() {
+    const { data, error } = await supabase.from('schools').select('*').order('name');
+    if (error) throwDb(error);
+    return (data || []).map(school => ({
+      schoolId: sid(school.id),
+      name: school.name,
+      emailDomain: school.email_domain || '',
+      isActive: Boolean(school.is_active),
+    }));
+  },
+
+  async developerSaveSchool(data) {
+    const schoolId = Number(data.schoolId) || null;
+    const name = String(data.name || '').trim();
+    if (!name) throw appError('INVALID_INPUT', '請輸入學校名稱。');
+    const emailDomain = String(data.emailDomain || '').trim();
+    if (schoolId) {
+      const school = await findOne('schools', { id: schoolId });
+      if (!school) throw appError('NOT_FOUND', '學校不存在。');
+      await updateRows('schools', { id: school.id }, { name, email_domain: emailDomain });
+    } else {
+      await insertRow('schools', { name, email_domain: emailDomain });
+    }
+    return { ok: true };
+  },
+
+  async developerListApplications() {
+    const { data, error } = await supabase.from('class_admin_applications').select('*').order('created_at', { ascending: false });
+    if (error) throwDb(error);
+    const schoolIds = [...new Set((data || []).map(application => application.school_id).filter(Boolean))];
+    const schools = schoolIds.length ? await listRowsIn('schools', 'id', schoolIds) : [];
+    const schoolById = new Map(schools.map(school => [String(school.id), school]));
+    return (data || []).map(application => ({
+      applicationId: sid(application.id),
+      schoolId: sid(application.school_id),
+      schoolName: (application.school_id && schoolById.get(String(application.school_id))?.name) || '未指定學校',
+      studentName: application.student_name,
+      studentNo: application.student_no,
+      className: application.class_name,
+      contactPhone: application.contact_phone,
+      email: application.email,
+      emailVerified: Boolean(application.email_verified),
+      status: application.status,
+      createdAt: application.created_at,
+    }));
+  },
+
+  async developerApproveApplication(data) {
+    const application = await findOne('class_admin_applications', { id: Number(data.applicationId) });
+    if (!application) throw appError('NOT_FOUND', '找不到此申請。');
+    if (application.status !== 'Pending') throw appError('INVALID_INPUT', '此申請已處理。');
+    if (!application.email_verified) throw appError('INVALID_INPUT', '申請人尚未完成信箱驗證，無法核准。');
+    const code = createClassAdminCodeValue();
+    await insertRow('class_admin_codes', { code_hash: sha256Hex(code), label: application.class_name || '未命名班級' });
+    await updateRows('class_admin_applications', { id: application.id }, { status: 'Approved', reviewed_at: new Date().toISOString() });
+    return { ok: true, code };
+  },
+
+  async developerRejectApplication(data) {
+    const application = await findOne('class_admin_applications', { id: Number(data.applicationId) });
+    if (!application || application.status !== 'Pending') throw appError('INVALID_INPUT', '此申請已處理。');
+    await updateRows('class_admin_applications', { id: application.id }, { status: 'Rejected', reviewed_at: new Date().toISOString() });
+    return { ok: true };
+  },
+
+  async developerListMerchants() {
+    const { data, error } = await supabase.from('merchants').select('*').order('created_at', { ascending: false });
+    if (error) throwDb(error);
+    const merchantIds = (data || []).map(merchant => merchant.id);
+    const stores = merchantIds.length ? await supabase.from('stores').select('id, name, merchant_id').in('merchant_id', merchantIds).then(result => result.data || []) : [];
+    const storeByMerchant = new Map();
+    stores.forEach(store => storeByMerchant.set(String(store.merchant_id), store));
+    return (data || []).map(merchant => ({
+      merchantId: sid(merchant.id),
+      merchantName: merchant.merchant_name,
+      email: merchant.email,
+      ownerName: merchant.owner_name,
+      ownerPhone: merchant.owner_phone,
+      isDisabled: Boolean(merchant.is_disabled),
+      emailVerified: Boolean(merchant.email_verified),
+      storeName: storeByMerchant.get(String(merchant.id))?.name || '尚未綁定店家',
+    }));
+  },
+
+  async developerSetMerchantDisabled(data) {
+    const merchant = await findOne('merchants', { id: Number(data.merchantId) });
+    if (!merchant) throw appError('NOT_FOUND', '找不到店家帳號。');
+    await updateRows('merchants', { id: merchant.id }, { is_disabled: Boolean(data.isDisabled) });
     return { ok: true };
   },
 

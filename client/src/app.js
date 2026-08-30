@@ -36,7 +36,11 @@ const state = {
   countdownTimer: null,
   closedSessionIds: new Set(),
   autoRefreshTimer: null,
-  push: { supported: false, subscribed: false }
+  push: { supported: false, subscribed: false },
+  merchant: null,
+  merchantToken: '',
+  merchantTab: 'orders',
+  classAdminApplication: null
 };
 
 const ICONS = {
@@ -57,6 +61,13 @@ async function bootstrap() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   window.addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); deferredInstallPrompt = event; renderInstallButton(); });
   startAutoRefresh();
+  const savedMerchant = (() => { try { return JSON.parse(localStorage.getItem('classLunch.merchant') || 'null'); } catch (_) { return null; } })();
+  if (savedMerchant && savedMerchant.token) {
+    state.merchant = savedMerchant.merchant;
+    state.merchantToken = savedMerchant.token;
+    renderMerchantShell();
+    return;
+  }
   const resetToken = new URLSearchParams(location.search).get('resetToken');
   if (resetToken) {
     state.token = '';
@@ -133,11 +144,14 @@ function renderDeveloperView() {
   const activeUsers = state.developerUsers.filter(user => !user.isDisabled).length;
   const disabledUsers = state.developerUsers.length - activeUsers;
   const unusedCodes = state.developerCodes.filter(code => !code.isUsed).length;
-  root.innerHTML = `<section class="view-enter space-y-5"><div class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.15em] text-stamp">SYSTEM OVERVIEW</p><h2 class="mt-1 font-serif text-2xl font-black text-ledger">開發者總覽</h2><p class="mt-2 text-sm leading-6 text-slate-500">集中管理班級管理者代碼與所有使用者帳號。密碼雜湊、驗證碼及開發者金鑰永不顯示。</p></div><button data-action="developer-refresh" class="rounded-xl bg-mist px-3 py-2 text-xs font-bold text-ledger">重新整理</button></div><div class="mt-5 grid grid-cols-3 gap-2"><div class="rounded-xl bg-mist px-3 py-3"><p class="text-[10px] font-bold text-slate-500">帳號總數</p><p class="mt-1 text-xl font-black tabular-nums text-ledger">${state.developerUsers.length}</p></div><div class="rounded-xl bg-mist px-3 py-3"><p class="text-[10px] font-bold text-slate-500">啟用中</p><p class="mt-1 text-xl font-black tabular-nums text-stamp">${activeUsers}</p></div><div class="rounded-xl bg-mist px-3 py-3"><p class="text-[10px] font-bold text-slate-500">待使用代碼</p><p class="mt-1 text-xl font-black tabular-nums text-apricot">${unusedCodes}</p></div></div>${disabledUsers ? `<p class="mt-3 rounded-xl bg-[#FFF6E8] px-3 py-2 text-xs text-[#805820]">目前有 ${disabledUsers} 個停用帳號。</p>` : ''}</div><div class="flex gap-2"><button data-action="developer-tab" data-tab="overview" class="flex-1 rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'overview' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">管理者代碼</button><button data-action="developer-tab" data-tab="users" class="flex-1 rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'users' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">所有帳號</button><button data-action="developer-tab" data-tab="settings" class="flex-1 rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'settings' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">系統設定</button><button data-action="developer-tab" data-tab="menu" class="flex-1 rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'menu' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">全體菜單</button></div><div id="developer-content"></div></section>`;
+  root.innerHTML = `<section class="view-enter space-y-5"><div class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.15em] text-stamp">SYSTEM OVERVIEW</p><h2 class="mt-1 font-serif text-2xl font-black text-ledger">開發者總覽</h2><p class="mt-2 text-sm leading-6 text-slate-500">集中管理班級管理者代碼與所有使用者帳號。密碼雜湊、驗證碼及開發者金鑰永不顯示。</p></div><button data-action="developer-refresh" class="rounded-xl bg-mist px-3 py-2 text-xs font-bold text-ledger">重新整理</button></div><div class="mt-5 grid grid-cols-3 gap-2"><div class="rounded-xl bg-mist px-3 py-3"><p class="text-[10px] font-bold text-slate-500">帳號總數</p><p class="mt-1 text-xl font-black tabular-nums text-ledger">${state.developerUsers.length}</p></div><div class="rounded-xl bg-mist px-3 py-3"><p class="text-[10px] font-bold text-slate-500">啟用中</p><p class="mt-1 text-xl font-black tabular-nums text-stamp">${activeUsers}</p></div><div class="rounded-xl bg-mist px-3 py-3"><p class="text-[10px] font-bold text-slate-500">待使用代碼</p><p class="mt-1 text-xl font-black tabular-nums text-apricot">${unusedCodes}</p></div></div>${disabledUsers ? `<p class="mt-3 rounded-xl bg-[#FFF6E8] px-3 py-2 text-xs text-[#805820]">目前有 ${disabledUsers} 個停用帳號。</p>` : ''}</div><div class="flex flex-wrap gap-2"><button data-action="developer-tab" data-tab="overview" class="flex-1 min-w-[86px] rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'overview' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">管理者代碼</button><button data-action="developer-tab" data-tab="users" class="flex-1 rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'users' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">所有帳號</button><button data-action="developer-tab" data-tab="settings" class="flex-1 rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'settings' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">系統設定</button><button data-action="developer-tab" data-tab="menu" class="flex-1 min-w-[86px] rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'menu' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">全體菜單</button><button data-action="developer-tab" data-tab="schools" class="flex-1 min-w-[86px] rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'schools' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">學校</button><button data-action="developer-tab" data-tab="applications" class="flex-1 min-w-[86px] rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'applications' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">申請</button><button data-action="developer-tab" data-tab="merchants" class="flex-1 min-w-[86px] rounded-xl px-3 py-3 text-xs font-bold ${state.developerTab === 'merchants' ? 'bg-ledger text-white' : 'bg-white text-ledger ring-1 ring-ledger/10'}">店家</button></div><div id="developer-content"></div></section>`;
   const content = $('#developer-content');
   if (state.developerTab === 'users') return renderDeveloperUsers(content);
   if (state.developerTab === 'settings') return renderDeveloperSettings(content);
   if (state.developerTab === 'menu') return renderDeveloperMenu(content);
+  if (state.developerTab === 'schools') return renderDeveloperSchools(content);
+  if (state.developerTab === 'applications') return renderDeveloperApplications(content);
+  if (state.developerTab === 'merchants') return renderDeveloperMerchants(content);
   return renderDeveloperCodes(content);
 }
 
@@ -157,7 +171,7 @@ async function renderDeveloperMenu(root) {
 
 function renderDeveloperMenuData() {
   const root = $('#developer-menu-data'); const c = state.developerMenu; if (!root || !c) return;
-  root.innerHTML = `<form id="store-form-dev" class="rounded-xl bg-mist p-3"><p class="text-xs font-black text-ledger">新增全體店家</p><div class="mt-2 grid grid-cols-2 gap-2"><input name="name" required maxlength="60" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-ledger" placeholder="店家名稱"/><input name="contact" maxlength="120" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-ledger" placeholder="聯絡資訊（選填）"/></div><textarea name="description" maxlength="200" rows="2" class="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-ledger" placeholder="店家簡介（選填）"></textarea><button class="mt-2 w-full rounded-lg bg-ledger px-3 py-2.5 text-xs font-bold text-white">新增店家</button></form><div class="mt-4">${c.stores.length ? c.stores.map(s => `<article class="mb-3 rounded-xl border border-slate-100 p-3"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(s.name)}</p>${s.description ? `<p class="mt-1 text-[11px] leading-5 text-slate-500">${escapeHtml(s.description)}</p>` : ''}${s.contact ? `<p class="mt-1 text-[11px] text-slate-500">聯絡：${escapeHtml(s.contact)}</p>` : ''}</div><div class="flex shrink-0 gap-1.5"><button type="button" data-action="developer-edit-store" data-id="${s.storeId}" class="rounded-lg bg-mist px-2.5 py-2 text-[11px] font-bold text-ledger">店家資訊</button><button type="button" data-action="developer-delete-store" data-id="${s.storeId}" class="rounded-lg bg-red-50 px-2.5 py-2 text-[11px] font-bold text-red-700">刪除</button></div></div><form id="menu-item-form-dev" class="mt-3 grid grid-cols-[1fr_70px_auto] gap-2"><input type="hidden" name="storeId" value="${s.storeId}"/><input name="name" required maxlength="80" class="min-w-0 rounded-lg border border-slate-200 px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="餐點名稱"/><input name="basePrice" required type="number" min="0" class="min-w-0 rounded-lg border border-slate-200 px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="價格"/><button class="rounded-lg bg-stamp px-2 text-xs font-bold text-white">新增餐點</button></form><div class="mt-3 space-y-2">${c.items.filter(i => i.storeId === s.storeId).map(i => `<div class="rounded-lg bg-paper p-2.5"><div class="flex items-start justify-between text-sm"><b>${escapeHtml(i.name)}</b><span class="shrink-0">${money(i.basePrice)} <button type="button" data-action="developer-delete-item" data-id="${i.itemId}" class="ml-1 text-[10px] font-bold text-red-700 underline">刪除</button></span></div><form id="item-option-form-dev" class="mt-2 grid grid-cols-[1fr_64px_auto] gap-2"><input type="hidden" name="itemId" value="${i.itemId}"/><input name="name" required maxlength="80" class="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-ledger" placeholder="加飯、大辣…"/><input name="priceAdjustment" required type="number" class="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-ledger" placeholder="差額"/><button class="rounded-md bg-white px-2 text-xs font-bold text-ledger ring-1 ring-ledger/10">加選項</button></form>${c.options.filter(o => o.itemId === i.itemId).length ? `<p class="mt-2 text-[11px] text-slate-500">${c.options.filter(o => o.itemId === i.itemId).map(o => `<span class="mr-1 inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[10px] ring-1 ring-ledger/10">${escapeHtml(o.name)} (${signedMoney(o.priceAdjustment)})<button type="button" data-action="developer-delete-option" data-id="${o.optionId}" class="text-red-700">✕</button></span>`).join('')}</p>` : ''}</div>`).join('') || '<p class="py-2 text-xs text-slate-500">尚未建立餐點。</p>'}</div></article>`).join('') : emptyState('先新增一間全體店家', '全體店家與餐點會出現在所有班級的菜單與場次中。')}</div>`;
+  root.innerHTML = `<form id="store-form-dev" class="rounded-xl bg-mist p-3"><p class="text-xs font-black text-ledger">新增全體店家</p><div class="mt-2 grid grid-cols-2 gap-2"><input name="name" required maxlength="60" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-ledger" placeholder="店家名稱"/><input name="contact" maxlength="120" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-ledger" placeholder="聯絡資訊（選填）"/></div><textarea name="description" maxlength="200" rows="2" class="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-ledger" placeholder="店家簡介（選填）"></textarea><div class="mt-2 grid grid-cols-2 gap-2"><select name="scope" id="dev-store-scope" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-ledger"><option value="all">範圍：全區</option><option value="school">範圍：學校專屬</option></select><select name="schoolId" id="dev-store-school" class="hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-ledger"><option value="">選擇學校…</option>${(state.publicConfig?.schools || []).map(school => `<option value="${escapeAttr(school.schoolId)}">${escapeHtml(school.name)}</option>`).join('')}</select></div><button class="mt-2 w-full rounded-lg bg-ledger px-3 py-2.5 text-xs font-bold text-white">新增店家</button></form><div class="mt-4">${c.stores.length ? c.stores.map(s => `<article class="mb-3 rounded-xl border border-slate-100 p-3"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(s.name)}</p>${s.description ? `<p class="mt-1 text-[11px] leading-5 text-slate-500">${escapeHtml(s.description)}</p>` : ''}${s.contact ? `<p class="mt-1 text-[11px] text-slate-500">聯絡：${escapeHtml(s.contact)}</p>` : ''}</div><div class="flex shrink-0 gap-1.5"><button type="button" data-action="developer-edit-store" data-id="${s.storeId}" class="rounded-lg bg-mist px-2.5 py-2 text-[11px] font-bold text-ledger">店家資訊</button><button type="button" data-action="developer-delete-store" data-id="${s.storeId}" class="rounded-lg bg-red-50 px-2.5 py-2 text-[11px] font-bold text-red-700">刪除</button></div></div><form id="menu-item-form-dev" class="mt-3 grid grid-cols-[1fr_70px_auto] gap-2"><input type="hidden" name="storeId" value="${s.storeId}"/><input name="name" required maxlength="80" class="min-w-0 rounded-lg border border-slate-200 px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="餐點名稱"/><input name="basePrice" required type="number" min="0" class="min-w-0 rounded-lg border border-slate-200 px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="價格"/><button class="rounded-lg bg-stamp px-2 text-xs font-bold text-white">新增餐點</button></form><div class="mt-3 space-y-2">${c.items.filter(i => i.storeId === s.storeId).map(i => `<div class="rounded-lg bg-paper p-2.5"><div class="flex items-start justify-between text-sm"><b>${escapeHtml(i.name)}</b><span class="shrink-0">${money(i.basePrice)} <button type="button" data-action="developer-delete-item" data-id="${i.itemId}" class="ml-1 text-[10px] font-bold text-red-700 underline">刪除</button></span></div><form id="item-option-form-dev" class="mt-2 grid grid-cols-[1fr_64px_auto] gap-2"><input type="hidden" name="itemId" value="${i.itemId}"/><input name="name" required maxlength="80" class="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-ledger" placeholder="加飯、大辣…"/><input name="priceAdjustment" required type="number" class="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-ledger" placeholder="差額"/><button class="rounded-md bg-white px-2 text-xs font-bold text-ledger ring-1 ring-ledger/10">加選項</button></form>${c.options.filter(o => o.itemId === i.itemId).length ? `<p class="mt-2 text-[11px] text-slate-500">${c.options.filter(o => o.itemId === i.itemId).map(o => `<span class="mr-1 inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[10px] ring-1 ring-ledger/10">${escapeHtml(o.name)} (${signedMoney(o.priceAdjustment)})<button type="button" data-action="developer-delete-option" data-id="${o.optionId}" class="text-red-700">✕</button></span>`).join('')}</p>` : ''}</div>`).join('') || '<p class="py-2 text-xs text-slate-500">尚未建立餐點。</p>'}</div></article>`).join('') : emptyState('先新增一間全體店家', '全體店家與餐點會出現在所有班級的菜單與場次中。')}</div>`;
 }
 
 async function submitDeveloperSave(action, form, message, rerender) {
@@ -230,7 +244,38 @@ function renderAuth() {
   else if (state.authMode === 'developerLogin') host.innerHTML = renderDeveloperLoginForm();
   else if (state.authMode === 'developerRegister') host.innerHTML = renderDeveloperRegisterForm();
   else if (state.authMode === 'developerVerify') host.innerHTML = renderDeveloperVerifyForm();
+  else if (state.authMode === 'classAdminApply') host.innerHTML = renderClassAdminApplyForm();
+  else if (state.authMode === 'classAdminVerify') host.innerHTML = renderClassAdminVerifyForm();
+  else if (state.authMode === 'merchantLogin') host.innerHTML = renderMerchantLoginForm();
+  else if (state.authMode === 'merchantRegister') host.innerHTML = renderMerchantRegisterForm();
+  else if (state.authMode === 'merchantVerify') host.innerHTML = renderMerchantVerifyForm();
   else host.innerHTML = renderLoginForm();
+}
+
+function renderClassAdminApplyForm() {
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">CLASS ADMIN APPLY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">申請班級管理者代碼</h1><p class="mt-2 text-sm leading-6 text-slate-500">填寫真實資料並完成信箱驗證；審核通過後，開發者會核發一組班級管理者代碼。</p>${configNote()}<form id="class-admin-apply-form" class="task-rule mt-6 space-y-3 pt-5">${schoolSelectHtml('schoolId', false)}<label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">真實姓名</span><input name="studentName" required maxlength="40" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><div class="grid grid-cols-2 gap-3"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">學號</span><input name="studentNo" inputmode="numeric" required maxlength="30" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">班級</span><input name="className" required maxlength="40" placeholder="例如 三年甲班" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label></div><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">聯絡電話</span><input name="contactPhone" type="tel" inputmode="tel" required maxlength="20" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" placeholder="09xxxxxxxx" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">電子郵件（接收驗證碼）</span><input name="email" type="email" required maxlength="120" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">送出申請並寄驗證碼</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="login" class="font-bold text-ledger underline underline-offset-4">←回到登入</button></div>`;
+}
+
+function renderClassAdminVerifyForm() {
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">CLASS ADMIN APPLY · VERIFY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">驗證申請信箱</h1><p class="mt-2 text-sm leading-6 text-slate-500">6位數驗證碼已寄到申請信箱（15分鐘內有效）。</p>${configNote()}<form id="class-admin-verify-form" class="task-rule mt-6 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">申請信箱</span><input name="email" type="email" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">6位數驗證碼</span><input name="code" inputmode="numeric" required pattern="[0-9]{6}" maxlength="6" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-center font-serif text-2xl font-black tracking-[.35em] outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證並送出申請</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="classAdminApply" class="font-bold text-apricot underline underline-offset-4">重新填寫申請</button><button data-auth="login" class="font-bold text-ledger underline underline-offset-4">←回到登入</button></div>`;
+}
+
+function renderMerchantLoginForm() {
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-stamp">MERCHANT PARTNER</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">店家工作台登入</h1><p class="mt-2 text-sm leading-6 text-slate-500">店家合作夥伴請用登記的 Email 登入，查看訂單與管理菜單。</p>${configNote()}<form id="merchant-login-form" class="task-rule mt-6 space-y-4 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">Email</span><input name="email" type="email" autocomplete="username" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">密碼</span><input name="password" type="password" autocomplete="current-password" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-stamp px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">登入店家工作台</button></form><div class="mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm"><button data-auth="merchantRegister" class="font-bold text-apricot underline underline-offset-4">註冊店家帳號</button><button data-auth="merchantVerify" class="font-bold text-[#A45A13] underline underline-offset-4">輸入信箱驗證碼</button><button data-auth="login" class="font-bold text-ledger underline underline-offset-4">←回到一般登入</button></div>`;
+}
+
+function renderMerchantRegisterForm() {
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-stamp">MERCHANT SIGNUP</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">店家合作註冊</h1><p class="mt-2 text-sm leading-6 text-slate-500">完成註冊後會寄出信箱驗證碼；「店家授權碼」可交給班級管理者綁定店家，或提供開發者協助設定菜單。</p>${configNote()}<form id="merchant-register-form" class="task-rule mt-5 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家名稱</span><input name="merchantName" required maxlength="60" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家地址</span><input name="address" maxlength="160" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><div class="grid grid-cols-2 gap-3"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家電話</span><input name="phone" type="tel" maxlength="20" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">負責人手機</span><input name="ownerPhone" type="tel" required maxlength="20" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label></div><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">負責人姓名</span><input name="ownerName" required maxlength="40" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">Email（登入帳號）</span><input name="email" type="email" required maxlength="120" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">密碼</span><input name="password" type="password" autocomplete="new-password" minlength="8" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" placeholder="至少 8 個字元" /></label><button class="w-full rounded-xl bg-stamp px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">註冊並寄驗證碼</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="merchantLogin" class="font-bold text-ledger underline underline-offset-4">←回到店家登入</button></div>`;
+}
+
+function renderMerchantVerifyForm() {
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-stamp">MERCHANT VERIFY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">驗證店家信箱</h1><p class="mt-2 text-sm leading-6 text-slate-500">6位數驗證碼已寄到你的 Email（15分鐘內有效）。</p>${configNote()}<form id="merchant-verify-form" class="task-rule mt-6 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">Email</span><input name="email" type="email" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">6位數驗證碼</span><input name="code" inputmode="numeric" required pattern="[0-9]{6}" maxlength="6" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-center font-serif text-2xl font-black tracking-[.35em] outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-stamp px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證並前往登入</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="merchantRegister" class="font-bold text-apricot underline underline-offset-4">重新註冊</button><button data-auth="merchantLogin" class="font-bold text-ledger underline underline-offset-4">←回到店家登入</button></div>`;
+}
+
+function schoolSelectHtml(name = 'schoolId', required = true) {
+  const schools = state.publicConfig?.schools || [];
+  if (!schools.length) return '';
+  return `<label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">學校</span><select name="${name}" ${required ? 'required' : ''} class="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-ledger"><option value="">選擇學校…</option>${schools.map(school => `<option value="${escapeAttr(school.schoolId)}">${escapeHtml(school.name)}</option>`).join('')}</select></label>`;
 }
 
 function renderLoginForm() {
@@ -240,11 +285,12 @@ function renderLoginForm() {
     <p class="mt-2 text-sm leading-6 text-slate-500">用學號登入，訂餐、錢包與取餐憑證都會在這裡。</p>
     ${configNote()}
     <form id="login-form" class="task-rule mt-6 space-y-4 pt-5">
+      ${schoolSelectHtml()}
       <label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">學號</span><input name="studentNo" inputmode="numeric" autocomplete="username" required class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-ledger focus:ring-4 focus:ring-ledger/10" placeholder="例如 1130001" /></label>
       <label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">密碼</span><input name="password" type="password" autocomplete="current-password" required class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-ledger focus:ring-4 focus:ring-ledger/10" placeholder="輸入你的密碼" /></label>
       <button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper transition hover:bg-ledger/90" type="submit">登入並開啟午餐手帳</button>
     </form>
-    <div class="mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 text-sm"><button data-auth="forgot" class="font-bold text-ledger underline underline-offset-4">忘記密碼</button><button data-auth="verifyEmail" class="font-bold text-apricot underline underline-offset-4">輸入信箱驗證碼</button><button data-auth="register" class="font-bold text-stamp underline underline-offset-4">註冊帳號</button></div><button data-auth="developerLogin" class="mt-5 w-full border-t border-dashed border-ledger/15 pt-4 text-center text-xs font-bold text-slate-500 underline underline-offset-4">開發者入口</button>`;
+    <div class="mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 text-sm"><button data-auth="forgot" class="font-bold text-ledger underline underline-offset-4">忘記密碼</button><button data-auth="verifyEmail" class="font-bold text-apricot underline underline-offset-4">輸入信箱驗證碼</button><button data-auth="register" class="font-bold text-stamp underline underline-offset-4">註冊帳號</button><button data-auth="classAdminApply" class="font-bold text-apricot underline underline-offset-4">申請管理者代碼</button><button data-auth="merchantLogin" class="font-bold text-[#A45A13] underline underline-offset-4">店家合作</button></div></div><button data-auth="developerLogin" class="mt-5 w-full border-t border-dashed border-ledger/15 pt-4 text-center text-xs font-bold text-slate-500 underline underline-offset-4">開發者入口</button>`;
 }
 
 function renderDeveloperLoginForm() {
@@ -480,7 +526,7 @@ async function renderWallet() {
     syncUser();
     $('#wallet-balance').textContent = money(state.user.walletBalance);
     $('#wallet-unpaid').innerHTML = state.wallet.cashUnpaid > 0 ? `目前另有 <b class="tabular-nums">${money(state.wallet.cashUnpaid)}</b> 現金未繳，請出示「結帳 QR」供管理員核對。` : '目前沒有現金未繳款項。';
-    $('#transaction-list').innerHTML = state.wallet.transactions.length ? state.wallet.transactions.map(t => `<div class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold">${t.type === 'TopUp' ? '儲值入帳' : '訂餐扣款'}</p><p class="mt-0.5 text-[11px] text-slate-500">${formatDateTime(t.timestamp)}</p></div><b class="text-sm tabular-nums ${t.amount >= 0 ? 'text-stamp' : 'text-apricot'}">${signedMoney(t.amount)}</b></div>`).join('') : emptyState('還沒有交易紀錄', '儲值或以餘額完成訂餐後，紀錄會出現在這裡。');
+    $('#transaction-list').innerHTML = state.wallet.transactions.length ? state.wallet.transactions.map(t => `<div class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold">${t.type === 'TopUp' ? '儲值入帳' : t.type === 'Manual' ? '手動調整' : '訂餐扣款'}</p><p class="mt-0.5 text-[11px] text-slate-500">${formatDateTime(t.timestamp)}</p></div><b class="text-sm tabular-nums ${t.amount >= 0 ? 'text-stamp' : 'text-apricot'}">${signedMoney(t.amount)}</b></div>`).join('') : emptyState('還沒有交易紀錄', '儲值或以餘額完成訂餐後，紀錄會出現在這裡。');
     $('#wallet-orders').innerHTML = (state.wallet.orders || []).length ? state.wallet.orders.map(order => `<div class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold">${escapeHtml(order.itemName || '訂單')}</p><p class="mt-0.5 text-[11px] text-slate-500">${escapeHtml(order.orderDate || '')} · ${escapeHtml(order.storeName || '')}${order.paymentStatus === 'PaidWallet' ? '' : ' · 未結清'}</p></div><b class="text-sm tabular-nums text-ledger">${money(order.totalPrice)}</b></div>`).join('') : '';
   } catch (error) {
     $('#wallet-unpaid').textContent = '暫時無法讀取錢包資料。';
@@ -594,7 +640,7 @@ async function renderAdminSessions(root) {
 
 function renderSessionData() {
   const c = state.admin.catalog; const fields = $('#session-form-fields'); const list = $('#session-list'); if (!c || !fields || !list) return;
-  fields.innerHTML = c.stores.length ? `<div class="space-y-3"><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">訂餐日期</span><input name="orderDate" type="date" min="${toDateInput(new Date())}" required class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger" value="${toDateInput(new Date())}" /></label><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">店家</span><select name="storeId" required class="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-ledger">${c.stores.map(s => `<option value="${s.storeId}">${escapeHtml(s.name)}${s.isGlobal ? '（全體）' : ''}</option>`).join('')}</select></label><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">截止時間</span><input name="cutoffTime" type="datetime-local" required class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger" value="${defaultCutoff()}" /></label><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">支付模式</span><select name="paymentMode" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-ledger"><option value="Hybrid">混合模式（餘額不足轉現金未繳）</option><option value="Stored-value Only">純儲值模式（餘額不足禁止下單）</option></select></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white">建立訂餐場次</button></div>` : `<div class="rounded-xl bg-[#FFF6E8] p-4 text-sm leading-6 text-[#885A1C]">請先在「菜單」新增至少一間店家。</div>`;
+  fields.innerHTML = c.stores.length ? `<div class="space-y-3"><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">訂餐日期</span><input name="orderDate" type="date" min="${toDateInput(new Date())}" required class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger" value="${toDateInput(new Date())}" /></label><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">店家</span><input type="hidden" name="storeId" id="session-store-id" required/><button type="button" data-action="browse-stores" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-left text-sm outline-none focus:border-ledger"><span id="session-store-label" class="text-slate-400">點此選擇店家（可查看店家資訊與菜單）</span></button></label><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">截止時間</span><input name="cutoffTime" type="datetime-local" required class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger" value="${defaultCutoff()}" /></label><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">支付模式</span><select name="paymentMode" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-ledger"><option value="Hybrid">混合模式（餘額不足轉現金未繳）</option><option value="Stored-value Only">純儲值模式（餘額不足禁止下單）</option></select></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white">建立訂餐場次</button></div>` : `<div class="rounded-xl bg-[#FFF6E8] p-4 text-sm leading-6 text-[#885A1C]">請先在「菜單」新增至少一間店家。</div>`;
   const sessions = [...c.sessions].sort((a, b) => a.orderDate.localeCompare(b.orderDate) || new Date(a.cutoffTime) - new Date(b.cutoffTime));
   list.innerHTML = `<section><h2 class="mb-3 font-serif text-lg font-black">已建立場次</h2><p class="mb-3 text-xs leading-5 text-slate-500">同一天可建立多個獨立場次，例如飲料與主食；每個場次各自設定截止時間並獨立接單。</p><div class="space-y-2">${sessions.length ? sessions.map(s => { const isOpen = new Date(s.cutoffTime) > new Date(); return `<article class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-ledger/5"><div class="flex justify-between gap-3"><div><p class="font-bold">${formatDate(s.orderDate)} · ${escapeHtml((c.stores.find(x => x.storeId === s.storeId) || {}).name || '未命名店家')}</p><p class="mt-1 text-xs text-slate-500">截止：${formatDateTime(s.cutoffTime)} · ${s.paymentMode === 'Stored-value Only' ? '純儲值' : '混合支付'}</p></div><span class="status-stamp h-fit rounded-md px-2 py-1 ${isOpen ? 'text-ledger' : 'text-slate-500'}">${isOpen ? '開放中' : '已截止'}</span></div><div class="mt-3 grid grid-cols-3 gap-2"><button type="button" data-action="edit-session-cutoff" data-id="${s.sessionId}" ${isOpen ? '' : 'disabled'} class="rounded-lg bg-mist px-2 py-2 text-xs font-bold text-ledger disabled:cursor-not-allowed disabled:opacity-40">修改截止</button><button type="button" data-action="close-session" data-id="${s.sessionId}" ${isOpen ? '' : 'disabled'} class="rounded-lg bg-[#FFF6E8] px-2 py-2 text-xs font-bold text-[#885A1C] disabled:cursor-not-allowed disabled:opacity-40">提前結束</button><button type="button" data-action="delete-session" data-id="${s.sessionId}" class="rounded-lg bg-red-50 px-2 py-2 text-xs font-bold text-red-700">刪除</button></div></article>`; }).join('') : emptyState('還沒有訂餐場次', '建立場次後，學生就會在訂餐頁看到日期票籤。')}</div></section>`;
 }
@@ -606,7 +652,7 @@ async function renderAdminUsers(root) {
 
 function renderUserList() {
   const root = $('#user-list'); if (!root) return;
-  root.innerHTML = `<div class="space-y-2">${state.admin.users.map(u => `<article class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold ${u.isDisabled ? 'text-slate-400 line-through' : ''}">${escapeHtml(u.seatNo)}號 ${escapeHtml(u.name)} ${u.role === 'Admin' ? '<span class="ml-1 text-[10px] text-ledger">ADMIN</span>' : ''}</p><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(u.studentNo)} · 餘額 ${money(u.walletBalance)}</p></div><div class="flex shrink-0 flex-wrap justify-end gap-1.5"><button data-action="direct-topup" data-id="${u.id}" ${u.isDisabled ? 'disabled' : ''} class="rounded-lg bg-stamp/10 px-2.5 py-2 text-xs font-bold text-stamp disabled:opacity-35">儲值</button><button data-action="toggle-user" data-id="${u.id}" data-disabled="${u.isDisabled ? 'false' : 'true'}" class="rounded-lg px-2.5 py-2 text-xs font-bold ${u.isDisabled ? 'bg-stamp/10 text-stamp' : 'bg-red-50 text-red-600'}">${u.isDisabled ? '恢復' : '停用'}</button>${u.role === 'Admin' ? (u.id !== state.user.id ? `<button data-action="remove-admin" data-id="${u.id}" class="rounded-lg bg-[#FFF6E8] px-2.5 py-2 text-xs font-bold text-[#885A1C]">移除管理</button>` : '') : `<button data-action="set-admin" data-id="${u.id}" class="rounded-lg bg-ledger/10 px-2.5 py-2 text-xs font-bold text-ledger">設為管理</button>`}</div></article>`).join('')}</div>`;
+  root.innerHTML = `<div class="space-y-2">${state.admin.users.map(u => `<article class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold ${u.isDisabled ? 'text-slate-400 line-through' : ''}">${escapeHtml(u.seatNo)}號 ${escapeHtml(u.name)} ${u.role === 'Admin' ? '<span class="ml-1 text-[10px] text-ledger">ADMIN</span>' : ''}</p><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(u.studentNo)} · 餘額 ${money(u.walletBalance)}</p></div><div class="flex shrink-0 flex-wrap justify-end gap-1.5"><button data-action="direct-topup" data-id="${u.id}" ${u.isDisabled ? 'disabled' : ''} class="rounded-lg bg-stamp/10 px-2.5 py-2 text-xs font-bold text-stamp disabled:opacity-35">儲值</button><button data-action="manual-deduct" data-id="${u.id}" ${u.isDisabled ? 'disabled' : ''} class="rounded-lg bg-[#FFF6E8] px-2.5 py-2 text-xs font-bold text-[#885A1C] disabled:opacity-35">扣款</button><button data-action="toggle-user" data-id="${u.id}" data-disabled="${u.isDisabled ? 'false' : 'true'}" class="rounded-lg px-2.5 py-2 text-xs font-bold ${u.isDisabled ? 'bg-stamp/10 text-stamp' : 'bg-red-50 text-red-600'}">${u.isDisabled ? '恢復' : '停用'}</button>${u.role === 'Admin' ? (u.id !== state.user.id ? `<button data-action="remove-admin" data-id="${u.id}" class="rounded-lg bg-[#FFF6E8] px-2.5 py-2 text-xs font-bold text-[#885A1C]">移除管理</button>` : '') : `<button data-action="set-admin" data-id="${u.id}" class="rounded-lg bg-ledger/10 px-2.5 py-2 text-xs font-bold text-ledger">設為管理</button>`}</div></article>`).join('')}</div>`;
   state.admin.users.filter(user => user.role !== 'Admin' && user.id !== state.user.id).forEach(user => {
     const toggle = root.querySelector(`[data-action="toggle-user"][data-id="${cssEscape(user.id)}"]`);
     toggle?.insertAdjacentHTML('afterend', `<button data-action="delete-user" data-id="${escapeAttr(user.id)}" class="rounded-lg bg-red-700 px-2.5 py-2 text-xs font-bold text-white">刪除</button>`);
@@ -679,6 +725,18 @@ async function onClick(event) {
     if (action === 'logout') return logout();
     if (action === 'developer-logout') return developerLogout();
     if (action === 'developer-tab') { state.developerTab = button.dataset.tab || 'overview'; renderDeveloperView(); return; }
+  if (action === 'merchant-tab') { state.merchantTab = button.dataset.tab; renderMerchantShell(); return; }
+  if (action === 'merchant-refresh') return renderMerchantContent();
+  if (action === 'merchant-logout') { merchantApi('merchantLogout').catch(() => {}); clearMerchantSession(); state.authMode = 'merchantLogin'; renderAuth(); toast('店家帳號已登出。', 'success'); return; }
+  if (action === 'merchant-toggle-ordering') return merchantToggleOrdering();
+  if (action === 'merchant-delete-item') return confirmMerchantItemDelete(button.dataset.id);
+  if (action === 'merchant-delete-option') return confirmMerchantOptionDelete(button.dataset.id);
+  if (action === 'browse-stores') return openStoreBrowserModal();
+  if (action === 'pick-store') { const id = button.dataset.id; const hidden = $('#session-store-id'); if (hidden) hidden.value = id; const label = $('#session-store-label'); if (label) label.textContent = button.dataset.name; closeModal(); return; }
+  if (action === 'manual-deduct') return openDeductModal(button.dataset.id);
+  if (action === 'developer-approve-application') return confirmApplicationApprove(button.dataset.id);
+  if (action === 'developer-reject-application') return confirmApplicationReject(button.dataset.id);
+  if (action === 'developer-toggle-merchant') return developerToggleMerchant(button.dataset.id, button.dataset.disabled === 'true');
     if (action === 'developer-refresh') return refreshDeveloperData();
     if (action === 'developer-create-code') return createDeveloperClassAdminCode();
     if (action === 'developer-revoke-code') return confirmDeveloperCodeRevoke(button.dataset.id);
@@ -740,6 +798,15 @@ async function onSubmit(event) {
   if (form.id === 'menu-item-form-dev') return submitDeveloperSave('developerSaveMenuItem', form, '全體餐點已新增。', () => renderDeveloperMenu($('#developer-content')));
   if (form.id === 'item-option-form-dev') return submitDeveloperSave('developerSaveItemOption', form, '全體選項已新增。', () => renderDeveloperMenu($('#developer-content')));
   if (form.id === 'register-form') return submitRegister(form);
+  if (form.id === 'class-admin-apply-form') return submitClassAdminApply(form);
+  if (form.id === 'class-admin-verify-form') return submitClassAdminVerify(form);
+  if (form.id === 'merchant-login-form') return submitMerchantLogin(form);
+  if (form.id === 'merchant-register-form') return submitMerchantRegister(form);
+  if (form.id === 'merchant-verify-form') return submitMerchantVerify(form);
+  if (form.id === 'merchant-settings-form') return submitMerchantSave('merchantSaveStore', form, '店家設定已儲存。', () => renderMerchantContent());
+  if (form.id === 'merchant-item-form') return submitMerchantSave('merchantSaveMenuItem', form, '餐點已新增。', () => renderMerchantMenu($('#merchant-content')));
+  if (form.id === 'merchant-option-form') return submitMerchantSave('merchantSaveItemOption', form, '選項已新增。', () => renderMerchantMenu($('#merchant-content')));
+  if (form.id === 'school-form-dev') return submitDeveloperSave('developerSaveSchool', form, '學校已儲存。', () => renderDeveloperSchools($('#developer-content')));
   if (form.id === 'verify-email-form') return submitVerifyRegistration(form);
   if (form.id === 'resend-verification-form') return submitResendVerification(form);
   if (form.id === 'forgot-form') return submitForgot(form);
@@ -760,6 +827,10 @@ function onChange(event) {
 
 function onInput(event) {
   if (event.target.id === 'order-search') { state.admin.orderQuery = event.target.value; renderDashboardOrderList(); return; }
+  if (event.target.matches('#dev-store-scope')) {
+    const schoolSelect = $('#dev-store-school');
+    if (schoolSelect) schoolSelect.classList.toggle('hidden', event.target.value !== 'school');
+  }
   if (event.target.matches('#order-form textarea[name="note"]')) {
     const session = state.sessions.find(item => item.sessionId === state.selectedSessionId);
     if (session) getOrderDraft(session).note = event.target.value.slice(0, 200);
@@ -787,6 +858,104 @@ async function submitDeveloperVerify(form) {
   if (!/^\d{6}$/.test(String(data.code || '').trim())) return toast('請輸入 6 位數驗證碼。', 'error');
   await busy(form, async () => { const result = await api('developerVerifyEmail', { username: data.username, code: String(data.code).trim() }); state.authMode = 'developerLogin'; renderAuth(); toast(result.message || '信箱驗證完成，請登入。', 'success'); });
 }
+
+async function submitClassAdminApply(form) {
+  const data = formData(form);
+  if (!String(data.studentName || '').trim() || !String(data.studentNo || '').trim() || !String(data.className || '').trim()) return toast('請完整填寫姓名、學號與班級。', 'error');
+  if (!String(data.contactPhone || '').trim() || String(data.contactPhone).trim().length < 8) return toast('請填寫正確的聯絡電話。', 'error');
+  await busy(form, async () => { const result = await api('applyClassAdmin', data); state.classAdminApplication = { email: result.email || data.email }; state.authMode = 'classAdminVerify'; renderAuth(); toast(result.message || '申請已送出，驗證碼已寄出。', 'success'); });
+}
+
+async function submitClassAdminVerify(form) {
+  const data = formData(form);
+  if (!/^\d{6}$/.test(String(data.code || '').trim())) return toast('請輸入 6 位數驗證碼。', 'error');
+  await busy(form, async () => { const result = await api('verifyClassAdminApplication', data); state.authMode = 'login'; renderAuth(); toast(result.message || '驗證完成，申請已送出。', 'success'); });
+}
+
+async function submitMerchantLogin(form) {
+  const data = formData(form);
+  await busy(form, async () => { const result = await api('merchantLogin', data); saveMerchantSession(result); renderMerchantShell(); toast('店家工作台已開啟。', 'success'); });
+}
+
+async function submitMerchantRegister(form) {
+  const data = formData(form);
+  await busy(form, async () => { const result = await api('merchantRegister', data); if (result.authorizationCode) window.__lastMerchantCode = result.authorizationCode; state.authMode = 'merchantVerify'; renderAuth(); toast(`${result.message || '請完成信箱驗證。'}${result.authorizationCode ? ' 店家授權碼：' + result.authorizationCode + '（請妥善保存，用於綁定店家）' : ''}`, 'success'); });
+}
+
+async function submitMerchantVerify(form) {
+  const data = formData(form);
+  if (!/^\d{6}$/.test(String(data.code || '').trim())) return toast('請輸入 6 位數驗證碼。', 'error');
+  await busy(form, async () => { const result = await api('merchantVerifyEmail', data); state.authMode = 'merchantLogin'; renderAuth(); toast(result.message || '驗證完成，請登入。', 'success'); });
+}
+
+function merchantApi(action, data = {}) { return api(action, data, state.merchantToken); }
+
+function saveMerchantSession(result) {
+  state.merchant = result.merchant;
+  state.merchantToken = result.token;
+  state.merchantTab = 'orders';
+  try { localStorage.setItem('classLunch.merchant', JSON.stringify({ token: result.token, merchant: result.merchant })); } catch (_) {}
+}
+
+function clearMerchantSession() {
+  state.merchant = null;
+  state.merchantToken = '';
+  try { localStorage.removeItem('classLunch.merchant'); } catch (_) {}
+}
+
+function renderMerchantShell() {
+  stopLunchCountdown();
+  app.innerHTML = `<div class="min-h-dvh bg-paper pb-10"><header class="sticky top-0 z-40 border-b border-ledger/10 bg-paper/95 px-4 py-3 backdrop-blur"><div class="mx-auto flex max-w-md items-center justify-between"><div><p class="text-[11px] font-bold tracking-[.13em] text-stamp">MERCHANT CONSOLE</p><h1 class="font-serif text-lg font-black text-ledger">店家工作台</h1></div><button data-action="merchant-logout" class="rounded-xl bg-white px-3 py-2 text-xs font-bold text-ledger ring-1 ring-ledger/10">登出</button></div></header><main class="mx-auto max-w-md px-4 pt-4"><div class="flex gap-2">${[['orders', '訂單'], ['menu', '菜單'], ['settings', '設定']].map(([tab, label]) => `<button data-action="merchant-tab" data-tab="${tab}" class="flex-1 rounded-xl px-3 py-3 text-xs font-bold ${state.merchantTab === tab ? 'bg-stamp text-white' : 'bg-white text-stamp ring-1 ring-stamp/10'}">${label}</button>`).join('')}</div><div id="merchant-content" class="mt-4 space-y-4">${skeletonLines(5)}</div></main></div><div id="modal-root"></div><div id="toast-root"></div>`;
+  renderMerchantContent();
+}
+
+function renderMerchantContent() {
+  const root = $('#merchant-content');
+  if (!root) return;
+  if (state.merchantTab === 'orders') return renderMerchantOrders(root);
+  if (state.merchantTab === 'menu') return renderMerchantMenu(root);
+  return renderMerchantSettings(root);
+}
+
+async function renderMerchantOrders(root) {
+  root.innerHTML = `${skeletonLines(4)}`;
+  try {
+    const data = await merchantApi('merchantGetDashboard');
+    if (!data.store) { root.innerHTML = emptyState('尚未綁定店家', '請向班級管理者索取「店家合作授權碼」，由管理者在店家資訊中綁定。'); return; }
+    const orders = data.orders || [];
+    const today = toDateInput(new Date());
+    const todayOrders = orders.filter(order => order.orderDate === today);
+    const pastOrders = orders.filter(order => order.orderDate !== today);
+    root.innerHTML = `<div class="rounded-[1.5rem] bg-white p-4 shadow-paper ring-1 ring-ledger/5"><div class="flex items-center justify-between"><div><p class="text-sm font-black text-ledger">${escapeHtml(data.store.name)}</p><p class="mt-0.5 text-[11px] text-slate-500">營業時間 ${escapeHtml(data.store.businessHours || '未設定')} · ${data.store.orderingOpen ? '訂購中' : '已暫停訂購'}</p></div><button data-action="merchant-refresh" class="rounded-lg bg-mist px-2.5 py-2 text-xs font-bold text-ledger">重新整理</button></div></div>${renderMerchantOrderList('今日訂單', todayOrders)}${renderMerchantOrderList('歷史訂單', pastOrders.slice(0, 30))}`;
+  } catch (error) { root.innerHTML = errorBlock(error.message); }
+}
+
+function renderMerchantOrderList(title, orders) {
+  return `<section class="mt-4"><h2 class="mb-2 font-serif text-lg font-black">${title}（${orders.length}）</h2><div class="space-y-2">${orders.length ? orders.map(order => `<article class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(order.studentName)} ${order.seatNo ? `<span class="font-normal text-slate-500">${escapeHtml(order.seatNo)}號</span>` : ''}</p><p class="mt-1 text-sm text-ledger">${escapeHtml(order.items)}</p>${order.note ? `<p class="mt-1 text-[11px] text-slate-500">備註：${escapeHtml(order.note)}</p>` : ''}</div><div class="text-right"><b class="block text-sm tabular-nums text-ledger">${money(order.totalPrice)}</b><span class="mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${order.pickupStatus === 'PickedUp' ? 'bg-stamp/10 text-stamp' : 'bg-apricot/15 text-apricot'}">${order.pickupStatus === 'PickedUp' ? '已取餐' : '待取餐'}</span></div></div></article>`).join('') : `<p class="rounded-xl bg-white px-4 py-6 text-center text-xs text-slate-400 ring-1 ring-ledger/5">尚無訂單。</p>`}</div></section>`;
+}
+
+async function renderMerchantMenu(root) {
+  root.innerHTML = `${skeletonLines(4)}`;
+  try {
+    const data = await merchantApi('merchantGetMenu');
+    if (!data.store) { root.innerHTML = emptyState('尚未綁定店家', '請向班級管理者索取授權碼並綁定。'); return; }
+    const store = data.store;
+    const items = data.items || [];
+    const options = data.options || [];
+    root.innerHTML = `<section class="rounded-[1.5rem] bg-white p-4 shadow-paper ring-1 ring-ledger/5"><p class="text-sm font-black text-ledger">${escapeHtml(store.name)}</p><form id="merchant-item-form" class="mt-3 grid grid-cols-[1fr_70px_auto] gap-2"><input name="name" required maxlength="80" class="min-w-0 rounded-lg border border-slate-200 px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="餐點名稱"/><input name="basePrice" required type="number" min="0" class="min-w-0 rounded-lg border border-slate-200 px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="價格"/><button class="rounded-lg bg-stamp px-2 text-xs font-bold text-white">新增餐點</button></form><div class="mt-3 space-y-2">${items.length ? items.map(item => `<div class="rounded-lg bg-paper p-2.5"><div class="flex justify-between text-sm"><b>${escapeHtml(item.name)}</b><div class="flex items-center gap-2"><span>${money(item.basePrice)}</span><button type="button" data-action="merchant-delete-item" data-id="${escapeAttr(item.itemId)}" class="text-[10px] font-bold text-red-700 underline">刪除</button></div></div><form id="merchant-option-form" class="mt-2 grid grid-cols-[1fr_64px_auto] gap-2"><input type="hidden" name="itemId" value="${escapeAttr(item.itemId)}"/><input name="name" required maxlength="80" class="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-ledger" placeholder="加飯、大辣…"/><input name="priceAdjustment" required type="number" class="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-ledger" placeholder="差額"/><button class="rounded-md bg-white px-2 text-xs font-bold text-ledger ring-1 ring-ledger/10">加選項</button></form>${options.filter(option => option.itemId === item.itemId).length ? `<p class="mt-2 text-[11px] text-slate-500">${options.filter(option => option.itemId === item.itemId).map(option => `${escapeHtml(option.name)} (${signedMoney(option.priceAdjustment)})<button type="button" data-action="merchant-delete-option" data-id="${escapeAttr(option.optionId)}" class="ml-1 text-red-700">✕</button>`).join(' · ')}</p>` : ''}</div>`).join('') : '<p class="py-3 text-xs text-slate-500">尚未建立餐點。</p>'}</div></section>`;
+  } catch (error) { root.innerHTML = errorBlock(error.message); }
+}
+
+async function renderMerchantSettings(root) {
+  root.innerHTML = `${skeletonLines(4)}`;
+  try {
+    const data = await merchantApi('merchantGetMenu');
+    if (!data.store) { root.innerHTML = emptyState('尚未綁定店家', '請向班級管理者索取授權碼並綁定。'); return; }
+    const store = data.store;
+    root.innerHTML = `<form id="merchant-settings-form" class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">STORE SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black">店家設定</h2><div class="mt-4 space-y-3"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家名稱</span><input name="name" required maxlength="60" value="${escapeAttr(store.name)}" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger"/></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">營業時間</span><input name="businessHours" maxlength="60" value="${escapeAttr(store.businessHours)}" placeholder="例如 11:00–13:30" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger"/></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家簡介</span><textarea name="description" maxlength="200" rows="2" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger">${escapeHtml(store.description || '')}</textarea></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">聯絡資訊</span><input name="contact" maxlength="120" value="${escapeAttr(store.contact)}" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger"/></label><button data-action="merchant-toggle-ordering" class="w-full rounded-xl px-4 py-3.5 text-sm font-bold text-white ${store.orderingOpen ? 'bg-red-700' : 'bg-stamp'}">${store.orderingOpen ? '暫停訂購（學生將無法下單）' : '開啟訂購（學生可下單）'}</button><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white" type="submit">儲存店家設定</button></div></form>`;
+  } catch (error) { root.innerHTML = errorBlock(error.message); }
+}
+
 
 async function submitLogin(form) {
   const data = formData(form);
@@ -902,6 +1071,10 @@ async function refreshOrders() {
 function startAutoRefresh() {
   window.addEventListener('focus', autoRefreshTick);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefreshTick(); });
+}
+
+function stopLunchCountdown() {
+  if (state.countdownTimer) { clearInterval(state.countdownTimer); state.countdownTimer = null; }
 }
 
 async function autoRefreshTick() {
@@ -1367,6 +1540,95 @@ function confirmDeveloperDelete(developerId) {
       await loadDeveloperAccounts();
     },
   });
+}
+
+async function submitMerchantSave(action, form, message, rerender) {
+  const data = formData(form);
+  await busy(form, async () => { const result = await merchantApi(action, data); toast(typeof message === 'function' ? message(result) : message, 'success'); await rerender(); });
+}
+
+async function merchantToggleOrdering() {
+  await busy($('#merchant-content'), async () => {
+    const data = await merchantApi('merchantGetMenu');
+    if (!data.store) return toast('尚未綁定店家。', 'error');
+    await merchantApi('merchantSaveStore', { orderingOpen: !data.store.orderingOpen });
+    toast(data.store.orderingOpen ? '已暫停訂購。' : '已開啟訂購。', 'success');
+    renderMerchantContent();
+  });
+}
+
+function confirmMerchantItemDelete(itemId) {
+  openConfirmModal({ eyebrow: 'DELETE ITEM', title: '刪除餐點？', body: '<p>已有訂單使用的餐點無法刪除。</p>', submitLabel: '確認刪除', onConfirm: async () => { await merchantApi('merchantDeleteMenuItem', { itemId }); closeModal(); toast('餐點已刪除。', 'success'); renderMerchantMenu($('#merchant-content')); } });
+}
+
+function confirmMerchantOptionDelete(optionId) {
+  openConfirmModal({ eyebrow: 'DELETE OPTION', title: '刪除選項？', body: '<p>已有訂單使用的選項無法刪除。</p>', submitLabel: '確認刪除', onConfirm: async () => { await merchantApi('merchantDeleteItemOption', { optionId }); closeModal(); toast('選項已刪除。', 'success'); renderMerchantMenu($('#merchant-content')); } });
+}
+
+function openStoreBrowserModal() {
+  const catalog = state.admin.catalog;
+  if (!catalog || !catalog.stores || !catalog.stores.length) return toast('尚無店家可選，請先建立店家。', 'error');
+  closeModal();
+  const root = $('#modal-root');
+  const stores = catalog.stores;
+  root.innerHTML = `<div class="fixed inset-0 z-50 flex items-end bg-ledger/60 p-3 sm:items-center sm:justify-center"><section class="modal-enter flex max-h-[85dvh] w-full max-w-md flex-col rounded-[1.5rem] bg-paper p-4 shadow-lift"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">PICK A STORE</p><h2 class="mt-1 font-serif text-xl font-black">選擇店家</h2><p class="mt-1 text-xs text-slate-500">查看店家資訊與菜單後選擇。</p><div class="mt-3 flex-1 space-y-3 overflow-y-auto pb-2">${stores.map(store => { const items = catalog.items.filter(item => item.storeId === store.storeId); const options = catalog.options; return `<article class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(store.name)}${store.isGlobal ? ' <span class="ml-1 rounded bg-ledger/10 px-1.5 py-0.5 text-[9px] font-black text-ledger">全體共用</span>' : ''}${store.businessHours ? ` <span class="text-[10px] font-normal text-slate-400">${escapeHtml(store.businessHours)}</span>` : ''}</p>${store.description ? `<p class="mt-0.5 text-[11px] leading-5 text-slate-500">${escapeHtml(store.description)}</p>` : ''}${store.contact ? `<p class="mt-0.5 text-[11px] text-slate-500">聯絡：${escapeHtml(store.contact)}</p>` : ''}</div><button data-action="pick-store" data-id="${escapeAttr(store.storeId)}" data-name="${escapeAttr(store.name)}" class="shrink-0 rounded-lg bg-ledger px-3 py-2 text-xs font-bold text-white">使用此店家</button></div>${items.length ? `<div class="mt-2 rounded-lg bg-paper px-2.5 py-2 text-[11px] leading-5 text-slate-600">${items.map(item => `${escapeHtml(item.name)} ${money(item.basePrice)}${options.filter(option => option.itemId === item.itemId).length ? '（' + options.filter(option => option.itemId === item.itemId).map(option => escapeHtml(option.name)).join('、') + '）' : ''}`).join(' · ')}</div>` : ''}</article>`; }).join('')}</div><button data-action="close-modal" class="mt-2 w-full rounded-xl bg-mist px-4 py-3 text-sm font-bold text-ledger">取消</button></section></div>`;
+}
+
+function openDeductModal(userId) {
+  const user = state.admin.users.find(item => item.id === userId);
+  if (!user) return;
+  openConfirmModal({
+    eyebrow: 'MANUAL DEDUCT',
+    title: `從 ${user.name} 的錢包扣款`, body: `<p class="text-sm text-slate-500">目前餘額 <b class="text-ledger">${money(user.walletBalance)}</b>。扣款不可超過餘額。</p><label class="mt-4 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">扣款金額</span><input id="deduct-amount" type="number" min="1" step="1" inputmode="numeric" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger"/></label><label class="mt-3 block"><span class="mb-1.5 block text-xs font-bold text-slate-600">原因（選填）</span><input id="deduct-note" maxlength="120" placeholder="例如：代訂書籍扣款" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger"/></label>`, submitLabel: '確認扣款', onConfirm: async () => {
+      const amount = Number($('#deduct-amount')?.value);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('請輸入正確的扣款金額。');
+      const result = await api('adminDeductBalance', { userId, amount, note: $('#deduct-note')?.value || '' });
+      closeModal();
+      toast(result.message || '扣款完成。', 'success');
+      await renderAdminUsers($('#admin-content'));
+    },
+  });
+}
+
+function confirmApplicationApprove(applicationId) {
+  openConfirmModal({ eyebrow: 'APPROVE', title: '核准此申請並核發管理者代碼？', body: '<p>核准後會產生一組一次性班級管理者代碼，需立即複製並私下交給申請人。</p>', submitLabel: '核准並核發', onConfirm: async () => {
+    const result = await developerApi('developerApproveApplication', { applicationId });
+    closeModal();
+    openCodeRevealModal({ eyebrow: 'ONE-TIME CLASS ACCESS', title: '班級管理者代碼已核發', code: result.code, note: '<p class="text-sm leading-6 text-slate-600">請立即複製並私下交給申請人，由其完成班級管理者註冊。</p>' });
+    renderDeveloperApplications($('#developer-content'));
+  } });
+}
+
+function confirmApplicationReject(applicationId) {
+  openConfirmModal({ eyebrow: 'REJECT', title: '駁回此申請？', body: '<p>申請人不會收到通知，此操作無法復原。</p>', submitLabel: '確認駁回', onConfirm: async () => { await developerApi('developerRejectApplication', { applicationId }); closeModal(); toast('申請已駁回。', 'success'); renderDeveloperApplications($('#developer-content')); } });
+}
+
+async function developerToggleMerchant(merchantId, isDisabled) {
+  await busy($('#developer-content'), async () => { await developerApi('developerSetMerchantDisabled', { merchantId, isDisabled }); toast(isDisabled ? '店家帳號已停用。' : '店家帳號已恢復。', 'success'); renderDeveloperMerchants($('#developer-content')); });
+}
+
+async function renderDeveloperSchools(root) {
+  root.innerHTML = `<section class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SCHOOLS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">學校管理</h2><p class="mt-2 text-xs leading-5 text-slate-500">學校清單會出現在註冊、登入與申請介面；全體菜單可設定為學校專屬。</p></div><button data-action="developer-refresh" class="shrink-0 rounded-xl bg-mist px-3 py-2.5 text-xs font-bold text-ledger">重新整理</button></div><form id="school-form-dev" class="mt-4 rounded-xl bg-mist p-3"><p class="text-xs font-black text-ledger">新增／編輯學校</p><div class="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2"><input name="schoolId" type="hidden"/><input name="name" required maxlength="80" class="min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="學校名稱"/><input name="emailDomain" maxlength="80" class="min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs outline-none focus:border-ledger" placeholder="Email後綴（選填）"/><button class="rounded-lg bg-ledger px-3 text-xs font-bold text-white">儲存</button></div></form><div id="school-list" class="mt-4 space-y-2">${skeletonLines(2)}</div></section>`;
+  try {
+    const schools = await developerApi('developerListSchools');
+    $('#school-list').innerHTML = schools.length ? schools.map(school => `<div class="flex items-center justify-between rounded-xl border border-ledger/10 bg-mist/40 px-3 py-2.5"><div><p class="text-sm font-black">${escapeHtml(school.name)}</p><p class="mt-0.5 text-[11px] text-slate-500">${escapeHtml(school.emailDomain || '未設定 Email 後綴')}${school.isActive ? '' : ' ·已停用'}</p></div><button type="button" data-action="developer-edit-school" data-id="${escapeAttr(school.schoolId)}" data-name="${escapeAttr(school.name)}" data-domain="${escapeAttr(school.emailDomain)}" class="rounded-lg bg-white px-2.5 py-2 text-[11px] font-bold text-ledger ring-1 ring-ledger/10">編輯</button></div>`).join('') : emptyState('尚未新增學校', '新增學校後，使用者註冊與登入時即可選擇學校。');
+  } catch (error) { $('#school-list').innerHTML = errorBlock(error.message); }
+}
+
+async function renderDeveloperApplications(root) {
+  root.innerHTML = `<section class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.13em] text-stamp">APPLICATIONS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">管理者代碼申請</h2><p class="mt-2 text-xs leading-5 text-slate-500">申請人完成信箱驗證後才會出現在待審核清單；核准即核發一組管理者代碼。</p></div><button data-action="developer-refresh" class="shrink-0 rounded-xl bg-mist px-3 py-2.5 text-xs font-bold text-ledger">重新整理</button></div><div id="application-list" class="mt-4 space-y-2">${skeletonLines(3)}</div></section>`;
+  try {
+    const applications = await developerApi('developerListApplications');
+    $('#application-list').innerHTML = applications.length ? applications.map(application => `<article class="rounded-xl border border-ledger/10 bg-mist/40 p-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(application.studentName)} <span class="font-normal text-slate-500">${escapeHtml(application.studentNo)}</span></p><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(application.className)} · ${escapeHtml(application.schoolName)} · ${escapeHtml(application.email)} · ${escapeHtml(application.contactPhone)}</p><p class="mt-1 text-[11px] ${application.emailVerified ? 'text-stamp' : 'text-apricot'}">Email ${application.emailVerified ? '已驗證' : '未驗證'} · ${application.status === 'Pending' ? '待審核' : application.status === 'Approved' ? '已核准' : '已駁回'}</p></div>${application.status === 'Pending' ? `<div class="flex shrink-0 flex-col gap-1.5"><button data-action="developer-approve-application" data-id="${escapeAttr(application.applicationId)}" ${application.emailVerified ? '' : 'disabled'} class="rounded-lg bg-ledger px-2.5 py-2 text-[11px] font-bold text-white disabled:opacity-40">核准</button><button data-action="developer-reject-application" data-id="${escapeAttr(application.applicationId)}" class="rounded-lg bg-red-50 px-2.5 py-2 text-[11px] font-bold text-red-700">駁回</button></div>` : ''}</div></article>`).join('') : emptyState('目前沒有申請', '申請人送出申請並完成信箱驗證後會出現在這裡。');
+  } catch (error) { $('#application-list').innerHTML = errorBlock(error.message); }
+}
+
+async function renderDeveloperMerchants(root) {
+  root.innerHTML = `<section class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold tracking-[.13em] text-stamp">MERCHANTS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">店家合作帳號</h2><p class="mt-2 text-xs leading-5 text-slate-500">店家可自行管理菜單與訂單；開發者可在此停用或恢復店家帳號。</p></div><button data-action="developer-refresh" class="shrink-0 rounded-xl bg-mist px-3 py-2.5 text-xs font-bold text-ledger">重新整理</button></div><div id="merchant-list" class="mt-4 space-y-2">${skeletonLines(3)}</div></section>`;
+  try {
+    const merchants = await developerApi('developerListMerchants');
+    $('#merchant-list').innerHTML = merchants.length ? merchants.map(merchant => `<div class="flex items-center justify-between rounded-xl border border-ledger/10 bg-mist/40 px-3 py-2.5"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(merchant.merchantName)}</p><p class="mt-0.5 truncate text-[11px] text-slate-500">${escapeHtml(merchant.ownerName)} · ${escapeHtml(merchant.ownerPhone)} · ${escapeHtml(merchant.email)}${merchant.emailVerified ? '' : ' ·未驗證'}</p><p class="mt-0.5 text-[11px] text-slate-400">綁定店家：${escapeHtml(merchant.storeName || '尚未綁定')}${merchant.isDisabled ? ' ·已停用' : ''}</p></div><button data-action="developer-toggle-merchant" data-id="${escapeAttr(merchant.merchantId)}" data-disabled="${merchant.isDisabled ? 'false' : 'true'}" class="shrink-0 rounded-lg px-2.5 py-2 text-[11px] font-bold ${merchant.isDisabled ? 'bg-stamp/10 text-stamp' : 'bg-red-50 text-red-700'}">${merchant.isDisabled ? '恢復' : '停用'}</button></div>`).join('') : emptyState('尚無店家帳號', '店家在登入頁「店家合作」註冊後會出現在這裡。');
+  } catch (error) { $('#merchant-list').innerHTML = errorBlock(error.message); }
 }
 
 async function api(action, data = {}, token = state.token, throwWhenUnconfigured = true) {

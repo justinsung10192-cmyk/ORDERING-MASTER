@@ -9,7 +9,7 @@ export const supabase = createClient(supabaseUrl, serviceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-function throwDb(error, fallback = '資料庫操作失敗。') {
+export function throwDb(error, fallback = '資料庫操作失敗。') {
   if (error?.message?.includes('INSUFFICIENT_BALANCE')) throw appError('INSUFFICIENT_BALANCE', '儲值餘額不足，無法完成此操作。');
   if (error?.message?.includes('USER_NOT_FOUND')) throw appError('USER_NOT_FOUND', '找不到使用者。');
   if (error?.message?.includes('ORDER_NOT_FOUND')) throw appError('ORDER_NOT_FOUND', '找不到訂單。');
@@ -98,13 +98,16 @@ export async function callRpc(name, params = {}) {
 // 班級可用的店家 = 本班店家 + 全體共用店家
 
 export async function listStoresForClass(classId) {
+  const classRow = await findOne('classes', { class_id: classId });
+  const schoolId = classRow && classRow.school_id ? String(classRow.school_id) : null;
   const { data, error } = await supabase
     .from('stores')
     .select('*')
     .or(`class_id.eq.${classId},is_global.eq.true`)
     .order('sort_order');
   if (error) throwDb(error);
-  return data || [];
+  // 全體店家：全區(all)全部分享；學校專屬(school)僅該學校班級可見
+  return (data || []).filter(store => !store.is_global || store.scope !== 'school' || (schoolId && String(store.school_id) === schoolId));
 }
 
 export async function findStoreForClass(storeId, classId) {

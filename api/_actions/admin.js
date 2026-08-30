@@ -1,6 +1,6 @@
 // 動作：管理員（儀表板、菜單、帳號、設定、邀請碼）
 import { appError, sid, num, round2, sha256Hex, todayString } from '../_lib/util.js';
-import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting, listStoresForClass } from '../_lib/db.js';
+import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting, listStoresForClass, callRpc } from '../_lib/db.js';
 import { bumpAuthVersion, createInviteCodeValue } from '../_lib/auth.js';
 import { outstandingOf, dashboardOrderRow } from '../_lib/serialize.js';
 import { mailConfigured } from '../_lib/mail.js';
@@ -127,15 +127,37 @@ export const actions = {
     if (!name) throw appError('INVALID_INPUT', '請輸入店家名稱。');
     const description = String(data.description || '').trim().slice(0, 200);
     const contact = String(data.contact || '').trim().slice(0, 120);
+    const merchantCode = String(data.merchantCode || '').trim();
+    let merchantId = null;
+    if (merchantCode) {
+      const merchant = await findOne('merchants', { authorization_code_hash: sha256Hex(merchantCode) });
+      if (!merchant) throw appError('INVALID_CODE', '店家合作授權碼不正確。');
+      merchantId = merchant.id;
+    }
     if (storeId) {
       const store = await findOne('stores', { id: storeId }, ctx.classId);
       if (!store) throw appError('NOT_FOUND', '店家不存在。');
       if (store.is_global) throw appError('FORBIDDEN', '全體共用店家由開發者管理。');
-      await updateRows('stores', { id: store.id }, { name, description, contact });
+      const fields = { name, description, contact };
+      if (merchantId) fields.merchant_id = merchantId;
+      await updateRows('stores', { id: store.id }, fields);
     } else {
-      await insertRow('stores', { class_id: ctx.classId, name, description, contact });
+      const fields = { class_id: ctx.classId, name, description, contact };
+      if (merchantId) fields.merchant_id = merchantId;
+      await insertRow('stores', fields);
     }
     return { ok: true };
+  },
+
+  async adminDeductBalance(data, ctx) {
+    const userId = Number(data.userId);
+    const amount = Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw appError('INVALID_INPUT', '請輸入正確的扣款金額。');
+    const note = String(data.note || '').trim().slice(0, 120) || '管理員手動扣款';
+    const user = await findOne('users', { id: userId }, ctx.classId);
+    if (!user) throw appError('NOT_FOUND', '找不到使用者。');
+    const result = await callRpc('fn_manual_balance', { p_class_id: ctx.classId, p_user_id: userId, p_amount: -amount, p_note: note });
+    return { ok: true, walletBalance: num(result.wallet_balance), message: `已從錢包扣款 ${amount} 元。` };
   },
 
   async adminSaveMenuItem(data, ctx) {

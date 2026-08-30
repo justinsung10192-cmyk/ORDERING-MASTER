@@ -118,10 +118,12 @@ export function createClassAdminCodeValue() {
   return randomCode(12);
 }
 
-export async function findOrCreateClass(className) {
+export async function findOrCreateClass(className, schoolId = null) {
   // 管理者註冊時建立班級（class_id 為隨機值，避免被猜測）
   const classId = generateClassId();
-  await supabase.from('classes').insert({ class_id: classId, name: className || '未命名班級' }).select().single();
+  const row = { class_id: classId, name: className || '未命名班級' };
+  if (schoolId) row.school_id = Number(schoolId);
+  await supabase.from('classes').insert(row).select().single();
   return classId;
 }
 

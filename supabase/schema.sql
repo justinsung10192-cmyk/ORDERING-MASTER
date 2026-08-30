@@ -469,3 +469,94 @@ $$;
 -- 移除排程：
 --   select cron.unschedule('cutoff-reminders');
 -- ============================================================
+
+
+-- =====================================================================
+-- v2 擴充：多學校 / 商家合作 / 管理者代碼申請 / 餘額手動調整（可重複執行）
+-- =====================================================================
+
+-- 學校
+create table if not exists public.schools (
+  id bigint generated always as identity primary key,
+  name text not null unique,
+  email_domain text not null default '',
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+-- 全區共用虛擬班級：讓全體店家/餐點的 class_id 有外鍵可指
+insert into public.classes (class_id, name)
+values ('global', '全區共用')
+on conflict (class_id) do nothing;
+
+alter table public.classes add column if not exists school_id bigint references public.schools(id) on delete set null;
+
+-- 商家
+create table if not exists public.merchants (
+  id bigint generated always as identity primary key,
+  merchant_name text not null,
+  address text not null default '',
+  phone text not null default '',
+  owner_name text not null default '',
+  owner_phone text not null default '',
+  email text not null unique,
+  password_hash text not null,
+  salt text not null,
+  email_verified boolean not null default false,
+  phone_verified boolean not null default false,
+  is_disabled boolean not null default false,
+  blocked_until timestamptz,
+  authorization_code_hash text not null default '',
+  created_at timestamptz not null default now()
+);
+
+-- 店家擴充：範圍、學校、商家綁定、營業時間、訂購開關
+alter table public.stores add column if not exists scope text not null default 'class';
+alter table public.stores add column if not exists school_id bigint references public.schools(id) on delete set null;
+alter table public.stores add column if not exists merchant_id bigint references public.merchants(id) on delete set null;
+alter table public.stores add column if not exists business_hours text not null default '';
+alter table public.stores add column if not exists ordering_open boolean not null default true;
+
+-- 班級管理者代碼申請
+create table if not exists public.class_admin_applications (
+  id bigint generated always as identity primary key,
+  school_id bigint references public.schools(id) on delete set null,
+  student_name text not null,
+  student_no text not null,
+  class_name text not null,
+  contact_phone text not null default '',
+  email text not null,
+  email_verified boolean not null default false,
+  verification_code_hash text not null default '',
+  verification_expires_at timestamptz,
+  status text not null default 'Pending',
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_applications_status on public.class_admin_applications (status, created_at);
+
+-- 商家工作階段與驗證
+alter table public.auth_tokens add column if not exists merchant_id bigint references public.merchants(id) on delete cascade;
+
+-- 餘額手動調整（正數=加值，負數=扣款；不可低於0）
+create or replace function public.fn_manual_balance(
+  p_class_id text,
+  p_user_id bigint,
+  p_amount numeric,
+  p_note text
+) returns jsonb
+language plpgsql
+security definer
+as $$
+declare v_balance numeric;
+begin
+  select wallet_balance into v_balance from public.users
+    where id = p_user_id and class_id = p_class_id for update;
+  if v_balance is null then raise exception 'USER_NOT_FOUND'; end if;
+  if v_balance + p_amount < 0 then raise exception 'INSUFFICIENT_BALANCE'; end if;
+  v_balance := v_balance + p_amount;
+  update public.users set wallet_balance = v_balance, updated_at = now() where id = p_user_id;
+  insert into public.transactions (class_id, user_id, order_id, amount, kind, note)
+    values (p_class_id, p_user_id, null, p_amount, 'Manual', coalesce(p_note, '手動調整'));
+  return jsonb_build_object('wallet_balance', v_balance);
+end; $$;

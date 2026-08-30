@@ -1,6 +1,6 @@
 // 動作：下單、修改訂單、取消訂單
 import { appError, sid, num, round2 } from '../_lib/util.js';
-import { findOne, callRpc } from '../_lib/db.js';
+import { findOne, callRpc, findStoreForClass } from '../_lib/db.js';
 import { computeOrderItems, loadSessionWithMenu } from '../_lib/serialize.js';
 
 function walletSplit(paymentMode, total, balance) {
@@ -17,6 +17,8 @@ async function assertCanOrder(session, ctx) {
   if (String(session.class_id) !== String(ctx.classId)) throw appError('FORBIDDEN', '場次不屬於本班。');
   if (!session.is_open) throw appError('CLOSED', '此場次已停止接受訂單。');
   if (new Date(session.cutoff_time).getTime() < Date.now()) throw appError('CLOSED', '此場次已截止。');
+  const orderStore = await findStoreForClass(session.store_id, ctx.classId);
+  if (orderStore && orderStore.ordering_open === false) throw appError('CLOSED', '店家目前暫停訂購，請稍後再試。');
 }
 
 export const actions = {

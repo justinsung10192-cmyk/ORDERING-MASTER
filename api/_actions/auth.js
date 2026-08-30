@@ -1,6 +1,6 @@
 // 動作：公開設定、註冊、驗證、登入、密碼重設、升級管理員、Bootstrap
-import { appError, sid, num, sha256Hex } from '../_lib/util.js';
-import { findOne, insertRow, updateRows, deleteRows, getAppSetting } from '../_lib/db.js';
+import { appError, sid, num, sha256Hex, randomDigits } from '../_lib/util.js';
+import { supabase, findOne, insertRow, updateRows, deleteRows, getAppSetting } from '../_lib/db.js';
 import {
   verifyPassword, createPassword, createSession, destroySession, bumpAuthVersion,
   issueEmailCode, consumeEmailCode, findOrCreateClass,
@@ -17,6 +17,11 @@ export const actions = {
   async getPublicConfig() {
     let maintenance = false;
     try { maintenance = (await getAppSetting('', 'maintenance', '')) === '1'; } catch (_) { /* 預設不維修 */ }
+    let schools = [];
+    try {
+      const { data } = await supabase.from('schools').select('id, name, email_domain').eq('is_active', true).order('name');
+      schools = (data || []).map(school => ({ schoolId: sid(school.id), name: school.name, emailDomain: school.email_domain || '' }));
+    } catch (_) { /* 無學校清單時保持空 */ }
     return {
       appName: '班級訂午餐系統',
       emailDomain: '',
@@ -24,6 +29,7 @@ export const actions = {
       hasDeveloper: true,
       vapidPublicKey: getVapidPublicKey(),
       maintenance,
+      schools,
     };
   },
 
@@ -33,6 +39,11 @@ export const actions = {
     const name = String(data.name || '').trim();
     const email = String(data.email || '').trim().toLowerCase();
     const password = String(data.password || '');
+    const schoolId = Number(data.schoolId) || null;
+    if (schoolId) {
+      const school = await findOne('schools', { id: schoolId });
+      if (!school) throw appError('INVALID_INPUT', '學校不存在。');
+    }
     if (!/^\d{3,30}$/.test(studentNo)) throw appError('INVALID_INPUT', '學號格式不正確。');
     if (!seatNo) throw appError('INVALID_INPUT', '請填寫座號。');
     if (!name) throw appError('INVALID_INPUT', '請填寫真實姓名。');
@@ -46,7 +57,7 @@ export const actions = {
     if (classAdminCode) {
       const record = await findOne('class_admin_codes', { code_hash: sha256Hex(classAdminCode) });
       if (!record || record.is_used) throw appError('INVALID_CODE', '班級管理者代碼不正確或已使用。');
-      classId = await findOrCreateClass(record.label || '未命名班級');
+      classId = await findOrCreateClass(record.label || '未命名班級', schoolId);
       role = 'Admin';
       await updateRows('class_admin_codes', { id: record.id }, { is_used: true, used_by: studentNo });
     } else if (inviteCode) {
@@ -91,8 +102,15 @@ export const actions = {
   },
 
   async login(data) {
+    const schoolId = Number(data.schoolId) || null;
     const user = await findOne('users', { student_no: cleanStudentNo(data.studentNo) });
     if (!user) throw appError('INVALID_CREDENTIALS', '學號或密碼不正確。');
+    if (schoolId) {
+      const classRow = await findOne('classes', { class_id: user.class_id });
+      if (classRow && classRow.school_id && String(classRow.school_id) !== String(schoolId)) {
+        throw appError('INVALID_CREDENTIALS', '此學號不屬於所選學校，請確認後重試。');
+      }
+    }
     if (user.is_disabled) throw appError('DISABLED', '此帳號已停用。');
     if (!user.email_verified) throw appError('NOT_VERIFIED', '請先完成信箱驗證後再登入。');
     if (!verifyPassword(user, String(data.password || ''))) throw appError('INVALID_CREDENTIALS', '學號或密碼不正確。');
@@ -138,5 +156,53 @@ export const actions = {
   async getOpenSessions(_data, ctx) {
     const { sessions, orders } = await loadOpenSessions(ctx.user);
     return { sessions, orders };
+  },
+
+  async applyClassAdmin(data) {
+    const schoolId = Number(data.schoolId) || null;
+    const studentName = String(data.studentName || '').trim();
+    const studentNo = String(data.studentNo || '').trim();
+    const className = String(data.className || '').trim();
+    const contactPhone = String(data.contactPhone || '').trim();
+    const email = String(data.email || '').trim().toLowerCase();
+    if (schoolId) {
+      const school = await findOne('schools', { id: schoolId });
+      if (!school) throw appError('INVALID_INPUT', '學校不存在。');
+    }
+    if (!studentName || !studentNo || !className) throw appError('INVALID_INPUT', '請完整填寫真實姓名、學號與班級。');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw appError('INVALID_INPUT', '電子郵件格式不正確。');
+    if (!contactPhone || String(contactPhone).length < 8) throw appError('INVALID_INPUT', '請填寫正確的聯絡電話。');
+    const existing = await findOne('class_admin_applications', { email });
+    if (existing && existing.status === 'Pending') throw appError('DUPLICATE', '此信箱已送出申請，請直接輸入驗證碼，或等候審核。');
+    const code = randomDigits(6);
+    const fields = {
+      school_id: schoolId,
+      student_name: studentName,
+      student_no: studentNo,
+      class_name: className,
+      contact_phone: contactPhone,
+      email_verified: false,
+      verification_code_hash: sha256Hex(code),
+      verification_expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    };
+    if (existing) {
+      await updateRows('class_admin_applications', { id: existing.id }, fields);
+    } else {
+      await insertRow('class_admin_applications', { ...fields, email, status: 'Pending' });
+    }
+    const delivery = await sendMail({ to: email, subject: '【訂餐通】班級管理者申請驗證碼', html: verificationEmailHtml(code) });
+    return { message: '申請已送出，驗證碼已寄至信箱。', delivery, email };
+  },
+
+  async verifyClassAdminApplication(data) {
+    const email = String(data.email || '').trim().toLowerCase();
+    const code = String(data.code || '').trim();
+    const application = await findOne('class_admin_applications', { email });
+    if (!application) throw appError('NOT_FOUND', '找不到此信箱的申請。');
+    if (application.email_verified) return { message: '此申請已完成信箱驗證。' };
+    if (String(application.verification_code_hash) !== sha256Hex(code)) throw appError('INVALID_CODE', '驗證碼不正確。');
+    if (new Date(application.verification_expires_at).getTime() < Date.now()) throw appError('INVALID_CODE', '驗證碼已過期，請重新申請。');
+    await updateRows('class_admin_applications', { id: application.id }, { email_verified: true });
+    return { message: '信箱驗證完成。申請已送出，請等待系統開發者審核。' };
   },
 };
