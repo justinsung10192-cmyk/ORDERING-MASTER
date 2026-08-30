@@ -42,6 +42,7 @@ export async function createDeveloperSession(developer) {
   await insertRow('auth_tokens', {
     class_id: 'developer',
     user_id: null,
+    developer_id: developer.id,
     type: 'DevSession',
     token_hash: sha256Hex(rawToken),
     expires_at: new Date(Date.now() + SESSION_SECONDS * 1000).toISOString(),
@@ -67,7 +68,7 @@ export async function validateDeveloperSession(token) {
   if (!record || new Date(record.expires_at).getTime() < Date.now()) {
     throw appError('UNAUTHORIZED', '開發者登入已失效，請重新登入。');
   }
-  const developer = await findOne('developers', { id: record.user_id });
+  const developer = await findOne('developers', { id: record.developer_id });
   if (!developer || developer.is_disabled) throw appError('UNAUTHORIZED', '開發者帳號不存在或已停用。');
   return developer;
 }

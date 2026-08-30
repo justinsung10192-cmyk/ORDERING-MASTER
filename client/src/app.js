@@ -142,7 +142,8 @@ function renderDeveloperView() {
 
 function renderDeveloperSettings(root) {
   const maintenance = Boolean(state.developerSettings?.maintenance);
-  root.innerHTML = `<div class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SYSTEM OWNER SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">開發者系統設定</h2><p class="mt-2 text-sm leading-6 text-slate-500">跨班級的系統與安全設定。各班管理者由各班在「帳號」頁自行維護。</p><section class="mt-4 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">全服廣播通知</p><p class="mt-1 text-xs leading-5 text-slate-500">傳送自訂訊息給所有班級已開啟通知的裝置。</p><textarea id="developer-broadcast-message" maxlength="200" rows="2" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-ledger" placeholder="例如：明天校外教學，暫停訂餐一天。"></textarea><button type="button" data-action="developer-broadcast" class="mt-2 w-full rounded-lg bg-ledger px-3 py-2.5 text-xs font-bold text-white">傳送全服廣播</button></section><section class="mt-3 rounded-xl border border-red-100 bg-red-50/60 p-3"><p class="text-xs font-bold text-red-700">維修模式</p><p class="mt-1 text-xs leading-5 text-slate-500">開啟後，一般使用者與管理員無法登入（登入頁顯示維修中）；開發者可正常登入以關閉。</p><button type="button" data-action="developer-maintenance" data-enabled="${maintenance ? 'false' : 'true'}" class="mt-2 w-full rounded-lg px-3 py-2.5 text-xs font-bold text-white ${maintenance ? 'bg-ledger' : 'bg-red-700'}">${maintenance ? '目前維修中 · 點我恢復' : '開啟維修模式'}</button></section><section class="mt-3 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">郵件服務檢查（驗證信／重設信）</p><p id="developer-email-diagnostics" class="mt-1 text-xs leading-5 text-slate-500">檢查 Gmail SMTP 授權與寄送狀態。</p><button type="button" data-action="developer-check-email" class="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10">檢查郵件服務</button></section></div>`;
+  root.innerHTML = `<div class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SYSTEM OWNER SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">開發者系統設定</h2><p class="mt-2 text-sm leading-6 text-slate-500">跨班級的系統與安全設定。各班管理者由各班在「帳號」頁自行維護。</p><section class="mt-4 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">全服廣播通知</p><p class="mt-1 text-xs leading-5 text-slate-500">傳送自訂訊息給所有班級已開啟通知的裝置。</p><textarea id="developer-broadcast-message" maxlength="200" rows="2" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-ledger" placeholder="例如：明天校外教學，暫停訂餐一天。"></textarea><button type="button" data-action="developer-broadcast" class="mt-2 w-full rounded-lg bg-ledger px-3 py-2.5 text-xs font-bold text-white">傳送全服廣播</button></section><section class="mt-3 rounded-xl border border-red-100 bg-red-50/60 p-3"><p class="text-xs font-bold text-red-700">維修模式</p><p class="mt-1 text-xs leading-5 text-slate-500">開啟後，一般使用者與管理員無法登入（登入頁顯示維修中）；開發者可正常登入以關閉。</p><button type="button" data-action="developer-maintenance" data-enabled="${maintenance ? 'false' : 'true'}" class="mt-2 w-full rounded-lg px-3 py-2.5 text-xs font-bold text-white ${maintenance ? 'bg-ledger' : 'bg-red-700'}">${maintenance ? '目前維修中 · 點我恢復' : '開啟維修模式'}</button></section><section class="mt-3 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">郵件服務檢查（驗證信／重設信）</p><p id="developer-email-diagnostics" class="mt-1 text-xs leading-5 text-slate-500">檢查 Gmail SMTP 授權與寄送狀態。</p><button type="button" data-action="developer-check-email" class="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10">檢查郵件服務</button></section><section class="mt-3 rounded-xl border border-ledger/10 bg-mist/40 p-3"><p class="text-xs font-bold text-ledger">開發者帳號</p><p class="mt-1 text-xs leading-5 text-slate-500">管理開發者帳號；不能刪除自己，且系統至少保留一位開發者。</p><div id="developer-accounts" class="mt-2 space-y-2">${skeletonLines(1)}</div></section></div>`;
+  loadDeveloperAccounts().catch(() => {});
 }
 
 function renderDeveloperCodes(root) {
@@ -195,7 +196,7 @@ function renderLoginForm() {
 }
 
 function renderDeveloperLoginForm() {
-  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">DEVELOPER CONSOLE</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">開發者登入</h1><p class="mt-2 text-sm leading-6 text-slate-500">開發者可管理所有班級、核發管理者代碼及處理帳號狀態。</p>${configNote()}<form id="developer-login-form" class="task-rule mt-6 space-y-4 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">開發者帳號</span><input name="username" autocomplete="username" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">密碼</span><input name="password" type="password" autocomplete="current-password" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">登入開發者工作台</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="developerRegister" class="font-bold text-apricot underline underline-offset-4">註冊開發者帳號</button><button data-auth="login" class="font-bold text-ledger underline underline-offset-4">回到一般登入</button></div>`;
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">DEVELOPER CONSOLE</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">開發者登入</h1><p class="mt-2 text-sm leading-6 text-slate-500">開發者可管理所有班級、核發管理者代碼及處理帳號狀態。</p>${configNote()}<form id="developer-login-form" class="task-rule mt-6 space-y-4 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">開發者帳號</span><input name="username" autocomplete="username" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">密碼</span><input name="password" type="password" autocomplete="current-password" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-ledger" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">登入開發者工作台</button></form><div class="mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm"><button data-auth="developerRegister" class="font-bold text-apricot underline underline-offset-4">註冊開發者帳號</button><button data-auth="developerVerify" class="font-bold text-[#A45A13] underline underline-offset-4">輸入信箱驗證碼</button><button data-auth="login" class="font-bold text-ledger underline underline-offset-4">回到一般登入</button></div>`;
 }
 
 function renderDeveloperRegisterForm() {
@@ -203,7 +204,7 @@ function renderDeveloperRegisterForm() {
 }
 
 function renderDeveloperVerifyForm() {
-  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">DEVELOPER VERIFY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">驗證開發者信箱</h1><p class="mt-2 text-sm leading-6 text-slate-500">6 位數驗證碼已寄到你的信箱（15 分鐘內有效），驗證完成後才能登入開發者工作台。</p>${configNote()}<form id="developer-verify-form" class="task-rule mt-6 space-y-4 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">開發者帳號</span><input name="username" autocomplete="username" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">6 位數驗證碼</span><input name="code" inputmode="numeric" autocomplete="one-time-code" required pattern="[0-9]{6}" maxlength="6" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-center font-serif text-2xl font-black tracking-[.35em] outline-none focus:border-ledger" placeholder="000000" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證並前往登入</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="developerRegister" class="font-bold text-apricot underline underline-offset-4">重新註冊</button><button data-auth="developerLogin" class="font-bold text-ledger underline underline-offset-4">← 回到開發者登入</button></div>`;
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-apricot">DEVELOPER VERIFY</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">驗證開發者信箱</h1><p class="mt-2 text-sm leading-6 text-slate-500">6 位數驗證碼已寄到你的信箱（15 分鐘內有效），驗證完成後才能登入開發者工作台。</p>${configNote()}<form id="developer-verify-form" class="task-rule mt-6 space-y-4 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">開發者帳號</span><input name="username" autocomplete="username" required class="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">6 位數驗證碼</span><input name="code" inputmode="numeric" autocomplete="one-time-code" required pattern="[0-9]{6}" maxlength="6" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-center font-serif text-2xl font-black tracking-[.35em] outline-none focus:border-ledger" placeholder="000000" /></label><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">驗證並前往登入</button></form><button type="button" data-action="developer-resend-verify" class="mt-3 w-full rounded-xl bg-mist px-4 py-3 text-sm font-bold text-ledger">重寄驗證碼</button><div class="mt-4 flex justify-between text-sm"><button data-auth="developerRegister" class="font-bold text-apricot underline underline-offset-4">重新註冊</button><button data-auth="developerLogin" class="font-bold text-ledger underline underline-offset-4">← 回到開發者登入</button></div>`;
 }
 
 function renderRegisterForm() {
@@ -645,6 +646,8 @@ async function onClick(event) {
     if (action === 'developer-check-email') return developerCheckEmail();
     if (action === 'developer-broadcast') return developerBroadcast();
     if (action === 'developer-maintenance') return developerSetMaintenance(button.dataset.enabled === 'true');
+    if (action === 'developer-resend-verify') return developerResendVerificationCode();
+    if (action === 'developer-delete-developer') return confirmDeveloperDelete(button.dataset.id);
     if (action === 'confirm-scan-action') return openScanConfirmation();
     if (action === 'close-modal') return closeModal();
     if (action === 'copy-order-text') return copyOrderText();
@@ -1257,6 +1260,51 @@ async function developerSetMaintenance(enabled) {
     await developerApi('developerSetMaintenance', { enabled });
     toast(enabled ? '已開啟維修模式。' : '維修模式已關閉。', 'success');
     await refreshDeveloperData();
+  });
+}
+
+let developerAccountsCache = [];
+
+async function developerResendVerificationCode() {
+  const username = String($('#developer-verify-form [name="username"]')?.value || '').trim();
+  if (!username) return toast('請先輸入開發者帳號。', 'error');
+  await busy($('#developer-verify-form'), async () => {
+    const result = await api('developerResendVerification', { username });
+    toast(result.message || '驗證碼已重新寄出。', 'success');
+  });
+}
+
+async function loadDeveloperAccounts() {
+  const container = $('#developer-accounts');
+  if (!container) return;
+  try {
+    const developers = await developerApi('developerListDevelopers');
+    developerAccountsCache = developers;
+    const selfId = state.developer && state.developer.id;
+    container.innerHTML = developers.map(developer => {
+      const isSelf = String(developer.id) === String(selfId);
+      const canDelete = !isSelf && developers.length > 1;
+      return `<div class="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2.5 ring-1 ring-ledger/5"><div class="min-w-0"><p class="truncate text-xs font-black ${isSelf ? 'text-stamp' : 'text-ledger'}">${escapeHtml(developer.username)}${isSelf ? ' <span class="font-normal text-slate-400">（目前帳號）</span>' : ''}</p><p class="mt-0.5 truncate text-[10px] text-slate-500">${escapeHtml(developer.email)} · Email ${developer.emailVerified ? '已驗證' : '未驗證'}${developer.isDisabled ? ' · 已停用' : ''}</p></div><button type="button" data-action="developer-delete-developer" data-id="${escapeAttr(developer.id)}" ${canDelete ? '' : 'disabled'} class="shrink-0 rounded-lg px-2.5 py-2 text-[11px] font-bold ${canDelete ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-400'}">刪除</button></div>`;
+    }).join('');
+  } catch (_) {
+    container.innerHTML = '<p class="text-xs text-slate-400">暫時無法載入。</p>';
+  }
+}
+
+function confirmDeveloperDelete(developerId) {
+  const target = developerAccountsCache.find(item => String(item.id) === String(developerId));
+  openConfirmModal({
+    eyebrow: 'DELETE DEVELOPER',
+    title: `刪除開發者「${target ? target.username : ''}」？`,
+    body: '<p>刪除後該開發者無法再登入；其已核發的班級管理者代碼與班級資料不受影響。</p><p class="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700">此動作無法復原，系統至少需保留一位開發者。</p>',
+    submitLabel: '確認刪除開發者',
+    onConfirm: async () => {
+      const result = await developerApi('developerDeleteDeveloper', { developerId });
+      closeModal();
+      toast(result.message || '開發者帳號已刪除。', 'success');
+      await refreshDeveloperData();
+      await loadDeveloperAccounts();
+    },
   });
 }
 

@@ -7,7 +7,7 @@ import { mailConfigured, sendMail, verificationEmailHtml, developerLoginAlertHtm
 import { sendPushToAll } from '../_lib/push.js';
 
 function publicDeveloper(developer) {
-  return { username: developer.username, name: developer.username, email: developer.email };
+  return { id: sid(developer.id), username: developer.username, name: developer.username, email: developer.email };
 }
 
 export const actions = {
@@ -176,6 +176,43 @@ export const actions = {
     const retainedTransactionCount = await countWhere('transactions', { user_id: user.id });
     await deleteRows('users', { id: user.id });
     return { ok: true, retainedOrderCount, retainedTransactionCount };
+  },
+
+  async developerResendVerification(data) {
+    const developer = await findOne('developers', { username: String(data.username || '').trim() });
+    if (!developer) throw appError('NOT_FOUND', '找不到此開發者帳號。');
+    if (developer.email_verified) throw appError('ALREADY', '此帳號已完成信箱驗證。');
+    await deleteRows('auth_tokens', { type: 'DevVerify', developer_id: developer.id });
+    const code = randomDigits(6);
+    await insertRow('auth_tokens', {
+      type: 'DevVerify',
+      developer_id: developer.id,
+      token_hash: sha256Hex(code),
+      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    });
+    const delivery = await sendMail({ to: developer.email, subject: '【訂餐通】開發者信箱驗證碼', html: verificationEmailHtml(code) });
+    return { message: delivery.sent ? '驗證碼已重新寄出，請檢查信箱。' : '驗證碼寄送失敗，請稍後再試。', delivery };
+  },
+
+  async developerListDevelopers() {
+    const developers = await listRows('developers', { order: 'created_at' });
+    return developers.map(developer => ({
+      id: sid(developer.id),
+      username: developer.username,
+      email: developer.email,
+      isDisabled: developer.is_disabled,
+      emailVerified: developer.email_verified,
+    }));
+  },
+
+  async developerDeleteDeveloper(data, ctx) {
+    const target = await findOne('developers', { id: Number(data.developerId) });
+    if (!target) throw appError('NOT_FOUND', '找不到開發者帳號。');
+    if (target.id === ctx.developer.id) throw appError('PROTECTED', '不能刪除自己正在使用的開發者帳號。');
+    const count = await countWhere('developers', {});
+    if (count <= 1) throw appError('PROTECTED', '系統至少需要保留一位開發者。');
+    await deleteRows('developers', { id: target.id });
+    return { ok: true, message: `開發者 ${target.username} 已刪除。` };
   },
 
   async developerGetSettings() {

@@ -35,6 +35,7 @@ const PUBLIC = new Set([
   'developerLogin',
   'developerRegister',
   'developerVerifyEmail',
+  'developerResendVerification',
 ]);
 
 const DEVELOPER = new Set([
@@ -51,6 +52,8 @@ const DEVELOPER = new Set([
   'developerGetEmailDiagnostics',
   'developerBroadcast',
   'developerSetMaintenance',
+  'developerListDevelopers',
+  'developerDeleteDeveloper',
 ]);
 
 const ADMIN = new Set([
@@ -101,7 +104,7 @@ export default async function handler(req, res) {
     const ctx = { token };
     const maintenance = await isMaintenance();
     if (PUBLIC.has(action)) {
-      const devPublic = action === 'developerLogin' || action === 'developerRegister' || action === 'developerVerifyEmail';
+      const devPublic = action === 'developerLogin' || action === 'developerRegister' || action === 'developerVerifyEmail' || action === 'developerResendVerification';
       if (maintenance && !devPublic && action !== 'getPublicConfig') throw appError('MAINTENANCE', '系統維修中，請稍後再來。');
     } else if (DEVELOPER.has(action)) {
       ctx.developer = await validateDeveloperSession(token);
