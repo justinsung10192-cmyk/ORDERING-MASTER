@@ -24,7 +24,7 @@ const state = {
   orderDrafts: {},
   editingOrderId: '',
   operationPending: false,
-  admin: { tab: 'dashboard', dashboard: null, selectedDate: toDateInput(new Date()), catalog: null, users: [], scanResult: null, scanError: '', orderFilter: 'all', orderQuery: '' },
+  admin: { tab: 'dashboard', dashboard: null, selectedDate: toDateInput(new Date()), catalog: null, users: [], scanResult: null, scanError: '', scanSessionId: '', orderFilter: 'all', orderQuery: '' },
   developerUsers: [],
   developerCodes: [],
   developerSettings: null,
@@ -379,7 +379,7 @@ async function generateVerification() {
     const [title, detail] = labels[state.verification.type];
     stage.innerHTML = `<div class="rounded-2xl border border-ledger/10 bg-[#FFFDF8] p-5 text-center notebook-lines"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">${title}</p><div id="qr-code" class="mx-auto mt-4 grid h-48 w-48 place-items-center rounded-xl bg-white p-3 shadow-paper"></div><p class="mt-4 text-sm leading-6 text-slate-600">${detail}</p><div class="mt-4 rounded-xl bg-ledger px-4 py-3 text-white"><p class="text-[10px] font-bold tracking-[.12em] text-blue-200">6-DIGIT PIN</p><p class="mt-0.5 font-serif text-3xl font-black tracking-[.23em]">${data.pin}</p></div><p id="qr-expiry" class="mt-3 text-xs font-bold text-slate-500"></p><button data-action="refresh-verification" class="mt-3 text-xs font-bold text-ledger underline underline-offset-4">重新產生 QR</button></div>`;
     if (!window.QRCode) throw new Error('QR 程式庫尚未載入，請稍後重新產生。');
-    new window.QRCode($('#qr-code'), { text: JSON.stringify(data.payload), width: 168, height: 168, colorDark: '#173B62', colorLight: '#ffffff', correctLevel: window.QRCode.CorrectLevel.M });
+    new window.QRCode($('#qr-code'), { text: typeof data.payload === 'string' ? data.payload : JSON.stringify(data.payload), width: 168, height: 168, colorDark: '#173B62', colorLight: '#ffffff', correctLevel: window.QRCode.CorrectLevel.M });
     updateVerificationCountdown();
     state.verification.interval = setInterval(updateVerificationCountdown, 1000);
   } catch (error) {
@@ -466,9 +466,22 @@ function renderSessionSummaryTables(summaries) {
   return `<section class="mt-5"><div class="mb-3"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SESSION ORDER SHEETS</p><h2 class="mt-1 font-serif text-lg font-black">各場次訂購總表</h2><p class="mt-1 text-xs leading-5 text-slate-500">每張總表僅統計一個店家與截止時間，方便直接核對備餐數量。</p></div><div class="space-y-4">${summaries.length ? summaries.map(summary => `<article data-session-summary="${escapeAttr(summary.sessionId)}" class="overflow-hidden rounded-2xl bg-white shadow-paper ring-1 ring-ledger/5"><header class="bg-ledger px-4 py-3 text-white"><div class="flex items-start justify-between gap-3"><div><h3 class="font-serif text-lg font-black">${escapeHtml(summary.storeName)}</h3><p class="mt-1 text-[11px] text-blue-100">${formatDate(summary.orderDate)} · 截止 ${formatDateTime(summary.cutoffTime)}</p></div><span class="rounded-md bg-white/15 px-2 py-1 text-[10px] font-bold">${summary.paymentMode === 'Stored-value Only' ? '純儲值' : '混合支付'}</span></div></header><div class="grid grid-cols-4 divide-x divide-ledger/10 bg-mist/60 text-center">${[['訂單', summary.stats.orderCount], ['總份', summary.stats.totalMeals], ['未繳', summary.stats.unpaidStudents], ['已取', summary.stats.pickedUp]].map(([label, value]) => `<div class="px-1 py-3"><p class="text-[10px] font-bold text-slate-500">${label}</p><p class="mt-1 text-base font-black tabular-nums text-ledger">${value}</p></div>`).join('')}</div><div class="p-4"><div class="mb-2 flex items-baseline justify-between"><h4 class="text-sm font-black text-ledger">餐點數量</h4><b class="text-sm tabular-nums text-apricot">${money(summary.stats.totalReceivable)}</b></div>${summary.items.length ? `<div class="divide-y divide-slate-100">${summary.items.map(item => `<div class="flex items-center justify-between gap-3 py-2.5"><div class="min-w-0"><p class="truncate text-sm font-bold text-ledger">${escapeHtml(item.itemName)}</p><p class="mt-0.5 truncate text-[11px] text-slate-500">${item.selectedOptions ? escapeHtml(item.selectedOptions) : '無加選項'} · ${item.orderCount} 筆訂單</p></div><b class="shrink-0 rounded-lg bg-stamp/10 px-3 py-1.5 text-sm tabular-nums text-stamp">${item.quantity} 份</b></div>`).join('')}</div>` : `<p class="rounded-xl bg-mist px-3 py-4 text-center text-sm text-slate-500">此場次尚無訂單。</p>`}</div></article>`).join('') : emptyState('這一天沒有已建立的場次', '建立場次後，這裡會依店家與截止時間顯示獨立總表。')}</div></section>`;
 }
 
-function renderAdminScan(root) {
+async function renderAdminScan(root) {
   const result = state.admin.scanResult;
-  root.innerHTML = `<div class="space-y-4"><div class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><p class="text-[11px] font-bold tracking-[.13em] text-ledger">THREE-LANE CHECK</p><h2 class="mt-1 font-serif text-xl font-black">掃碼核對中心</h2><p class="mt-2 text-sm leading-6 text-slate-500">先選擇作業，再掃描學生在憑證頁產生的動態 QR Code。</p><div class="mt-4 grid grid-cols-3 gap-2">${[['pickup','取餐','bg-stamp'],['checkout','結帳','bg-apricot'],['topup','儲值','bg-ledger']].map(([mode,label,color]) => `<button data-action="open-scanner" data-mode="${mode}" class="rounded-xl ${color} px-2 py-3 text-xs font-bold text-white shadow-sm">${label}<span class="mt-1 block text-[10px] font-normal text-white/80">掃描 QR</span></button>`).join('')}</div></div>${result ? renderScanResult(result) : `<div class="binder-edge rounded-xl border border-dashed border-ledger/20 bg-white px-7 py-8 text-center text-sm leading-6 text-slate-500">尚未掃描憑證。學生的 QR 與 PIN 有效時間為 5 分鐘。</div>`}</div>`;
+  root.innerHTML = `<div class="space-y-4"><div class="rounded-[1.5rem] bg-white p-5 shadow-paper ring-1 ring-ledger/5"><p class="text-[11px] font-bold tracking-[.13em] text-ledger">THREE-LANE CHECK</p><h2 class="mt-1 font-serif text-xl font-black">掃碼核對中心</h2><p class="mt-2 text-sm leading-6 text-slate-500">一天可能有多個場次；先選「核對場次」（或全部），再掃描學生憑證頁的動態 QR Code（也可輸入 PIN）。</p><div id="scan-session-area">${skeletonLines(1)}</div><div class="mt-3 grid grid-cols-3 gap-2">${[['pickup','取餐','bg-stamp'],['checkout','結帳','bg-apricot'],['topup','儲值','bg-ledger']].map(([mode,label,color]) => `<button data-action="open-scanner" data-mode="${mode}" class="rounded-xl ${color} px-2 py-3 text-xs font-bold text-white shadow-sm">${label}<span class="mt-1 block text-[10px] font-normal text-white/80">掃描 QR</span></button>`).join('')}</div></div>${result ? renderScanResult(result) : `<div class="binder-edge rounded-xl border border-dashed border-ledger/20 bg-white px-7 py-8 text-center text-sm leading-6 text-slate-500">尚未掃描憑證。學生的 QR 與 PIN 有效時間為 5 分鐘。</div>`}</div>`;
+  try {
+    if (!state.admin.catalog) state.admin.catalog = await api('adminCatalog');
+    renderScanSessionArea();
+  } catch (_) { const area = $('#scan-session-area'); if (area) area.innerHTML = ''; }
+}
+
+function renderScanSessionArea() {
+  const area = $('#scan-session-area'); if (!area) return;
+  const catalog = state.admin.catalog;
+  const sessions = (catalog?.sessions || []).slice().sort((a, b) => a.orderDate.localeCompare(b.orderDate) || new Date(a.cutoffTime) - new Date(b.cutoffTime));
+  area.innerHTML = sessions.length
+    ? `<label class="mt-3 block"><span class="mb-1 block text-xs font-bold text-slate-600">核對場次（一天多場次時指定）</span><select id="scan-session" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-ledger"><option value="">全部場次</option>${sessions.map(s => `<option value="${escapeAttr(s.sessionId)}" ${state.admin.scanSessionId === s.sessionId ? 'selected' : ''}>${escapeHtml(formatDate(s.orderDate))} · ${escapeHtml((catalog.stores.find(x => x.storeId === s.storeId) || {}).name || '未命名店家')} · 截止 ${escapeHtml(formatDateTime(s.cutoffTime))}</option>`).join('')}</select></label>`
+    : '<p class="mt-3 rounded-xl bg-mist px-3 py-2 text-xs text-slate-500">目前沒有場次可選；預設核對全部場次。</p>';
 }
 
 function renderScanResult(result) {
@@ -598,7 +611,7 @@ async function onClick(event) {
     if (action === 'developer-toggle-user') return toggleDeveloperUser(button.dataset.id, button.dataset.disabled === 'true');
     if (action === 'developer-delete-user') return confirmDeveloperUserDelete(button.dataset.id);
     if (action === 'admin-tab') { state.admin.tab = button.dataset.tab; state.admin.scanResult = null; state.admin.scanError = ''; renderAdmin(); return; }
-    if (action === 'open-scanner') return openScanner(button.dataset.mode);
+    if (action === 'open-scanner') { state.admin.scanSessionId = $('#scan-session')?.value || ''; return openScanner(button.dataset.mode); }
     if (action === 'close-scanner') return closeScanner();
     if (action === 'submit-manual-qr') return processManualQr();
     if (action === 'submit-pin') return processManualPin();
@@ -789,17 +802,10 @@ async function refreshOrders() {
 }
 
 // ----自動刷新：新增場次、儲值、訂單異動會自動同步，不需手動重新載入----
-const AUTO_REFRESH_SECONDS = 20;
-
+// 只在「切回分頁／視窗聚焦」時同步，不做定時輪詢
 function startAutoRefresh() {
-  stopAutoRefresh();
-  state.autoRefreshTimer = setInterval(() => { autoRefreshTick(); }, AUTO_REFRESH_SECONDS * 1000);
   window.addEventListener('focus', autoRefreshTick);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefreshTick(); });
-}
-
-function stopAutoRefresh() {
-  if (state.autoRefreshTimer) { clearInterval(state.autoRefreshTimer); state.autoRefreshTimer = null; }
 }
 
 async function autoRefreshTick() {
@@ -845,7 +851,8 @@ async function processScannedQr(raw) {
   setOperationLock(true);
   try {
     const payload = parseVerificationPayload(raw);
-    const result = await api('adminResolveVerification', { mode: state.scannerMode, payload });
+    const sessionId = $('#scan-session')?.value || state.admin.scanSessionId || '';
+    const result = await api('adminResolveVerification', { mode: state.scannerMode, payload, sessionId: sessionId || null });
     await closeScanner();
     applyScanResult(result);
     toast('驗證成功，請核對後再確認。', 'success');
@@ -870,7 +877,7 @@ async function processManualPin() {
   const pin = String($('#manual-pin')?.value || '').trim();
   if (!/^\d{6}$/.test(pin)) return toast('請輸入 6 位數 PIN 碼。', 'error');
   await busy($('#manual-pin'), async () => {
-    const result = await api('adminResolvePin', { mode: state.scannerMode, pin });
+    const result = await api('adminResolvePin', { mode: state.scannerMode, pin, sessionId: state.admin.scanSessionId || null });
     await closeScanner();
     applyScanResult(result);
     toast('驗證成功，請核對後再確認。', 'success');

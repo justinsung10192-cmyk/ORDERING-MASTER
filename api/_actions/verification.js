@@ -22,7 +22,7 @@ function scanOrderShape(order, session) {
 }
 
 // 共用：依已驗證的 payload 解析學生、訂單與待收金額（掃碼與 PIN 皆使用）
-async function resolveByPayload(mode, payload, ctx) {
+async function resolveByPayload(mode, payload, ctx, scopeSessionId = null) {
   const student = await findOne('users', { id: Number(payload.uid) }, ctx.classId);
   if (!student) throw appError('NOT_FOUND', '找不到學生帳號。');
 
@@ -31,7 +31,13 @@ async function resolveByPayload(mode, payload, ctx) {
   const walletBalance = num(student.wallet_balance);
 
   if (mode === 'pickup') {
-    const sessions = await listRows('sessions', { classId: ctx.classId, filters: { order_date: todayString() } });
+    let sessions;
+    if (scopeSessionId) {
+      const scoped = await findOne('sessions', { id: scopeSessionId }, ctx.classId);
+      sessions = scoped ? [scoped] : [];
+    } else {
+      sessions = await listRows('sessions', { classId: ctx.classId, filters: { order_date: todayString() } });
+    }
     const sessionIds = sessions.map(session => session.id);
     const userOrders = sessionIds.length
       ? (await listRowsIn('orders', 'session_id', sessionIds, { classId: ctx.classId })).filter(
@@ -42,7 +48,7 @@ async function resolveByPayload(mode, payload, ctx) {
     orders = userOrders.map(order => scanOrderShape(order, sessionById.get(String(order.session_id))));
   } else if (mode === 'checkout') {
     const userOrders = await listRows('orders', { classId: ctx.classId, filters: { user_id: student.id } });
-    const unpaid = userOrders.filter(order => outstandingOf(order) > 0);
+    const unpaid = userOrders.filter(order => outstandingOf(order) > 0 && (!scopeSessionId || String(order.session_id) === String(scopeSessionId)));
     const sessionIds = [...new Set(unpaid.map(order => order.session_id))];
     const sessions = sessionIds.length ? await listRowsIn('sessions', 'id', sessionIds, { classId: ctx.classId }) : [];
     const sessionById = new Map(sessions.map(session => [String(session.id), session]));
@@ -77,7 +83,7 @@ export const actions = {
       status: 'Pending',
       expires_at: new Date(exp).toISOString(),
     });
-    return { payload: JSON.stringify(payload), pin, expiresAt: new Date(exp).toISOString() };
+    return { payload, pin, expiresAt: new Date(exp).toISOString() };
   },
 
   async adminResolveVerification(data, ctx) {
@@ -98,7 +104,7 @@ export const actions = {
     if (!storedPayload || String(storedPayload.pin) !== String(payload.pin)) throw appError('INVALID_QR', 'PIN 碼不正確。');
 
     await updateRows('verification_records', { id: record.id }, { status: 'Resolved', resolved_at: new Date().toISOString() });
-    return resolveByPayload(mode, payload, ctx);
+    return resolveByPayload(mode, payload, ctx, Number(data.sessionId) || null);
   },
 
   // 相機無法使用時，以 6 位 PIN 取代 QR 驗證
@@ -121,7 +127,7 @@ export const actions = {
     }
 
     await updateRows('verification_records', { id: record.id }, { status: 'Resolved', resolved_at: new Date().toISOString() });
-    return resolveByPayload(mode, payload, ctx);
+    return resolveByPayload(mode, payload, ctx, Number(data.sessionId) || null);
   },
 
   async adminConfirmPickup(data, ctx) {
