@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { appError, sid, num, sha256Hex, randomDigits } from '../_lib/util.js';
 import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting, throwDb } from '../_lib/db.js';
 import { verifyPassword, createPassword, createDeveloperSession, destroySession, bumpAuthVersion, createClassAdminCodeValue } from '../_lib/auth.js';
-import { mailConfigured, sendMail, verificationEmailHtml, developerLoginAlertHtml } from '../_lib/mail.js';
+import { mailConfigured, sendMail, verificationEmailHtml, developerLoginAlertHtml, classAdminCodeEmailHtml } from '../_lib/mail.js';
 import { sendPushToAll } from '../_lib/push.js';
 
 function publicDeveloper(developer) {
@@ -313,7 +313,13 @@ export const actions = {
     const code = createClassAdminCodeValue();
     await insertRow('class_admin_codes', { code_hash: sha256Hex(code), label: application.class_name || '未命名班級' });
     await updateRows('class_admin_applications', { id: application.id }, { status: 'Approved', reviewed_at: new Date().toISOString() });
-    return { ok: true, code };
+    const appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+    const delivery = await sendMail({
+      to: application.email,
+      subject: '【訂餐通】班級管理者代碼已核發',
+      html: classAdminCodeEmailHtml({ name: application.student_name, className: application.class_name, code, frontendUrl: appUrl }),
+    });
+    return { ok: true, emailed: delivery.sent };
   },
 
   async developerRejectApplication(data) {

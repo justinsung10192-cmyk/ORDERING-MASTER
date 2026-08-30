@@ -152,11 +152,18 @@ export const actions = {
   async adminDeductBalance(data, ctx) {
     const userId = Number(data.userId);
     const amount = Number(data.amount);
+    if (!Number.isInteger(userId) || userId <= 0) throw appError('INVALID_INPUT', '使用者資料不正確。');
     if (!Number.isFinite(amount) || amount <= 0) throw appError('INVALID_INPUT', '請輸入正確的扣款金額。');
     const note = String(data.note || '').trim().slice(0, 120) || '管理員手動扣款';
     const user = await findOne('users', { id: userId }, ctx.classId);
     if (!user) throw appError('NOT_FOUND', '找不到使用者。');
-    const result = await callRpc('fn_manual_balance', { p_class_id: ctx.classId, p_user_id: userId, p_amount: -amount, p_note: note });
+    let result;
+    try {
+      result = await callRpc('fn_manual_balance', { p_class_id: ctx.classId, p_user_id: userId, p_amount: -amount, p_note: note });
+    } catch (error) {
+      if (String(error.message || '').includes('fn_manual_balance')) throw appError('DB_ERROR', '資料庫尚未建立餘額調整函式，請在 Supabase SQL Editor 執行 schema.sql 的 v2 擴充區塊。');
+      throw error;
+    }
     return { ok: true, walletBalance: num(result.wallet_balance), message: `已從錢包扣款 ${amount} 元。` };
   },
 

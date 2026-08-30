@@ -22,6 +22,7 @@ const HANDLERS = {
   ...sessionsActions,
   ...adminActions,
   ...developerActions,
+  ...merchantActions,
   ...pushActions,
 };
 

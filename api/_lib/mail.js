@@ -84,3 +84,6 @@ export function developerLoginAlertHtml({ name, email, time, blockUrl }) {
     <p style="margin-top:16px;font-size:12px;color:#9aa8b5">此封鎖連結 30 分鐘內有效。</p>
   </div>`;
 }
+export function classAdminCodeEmailHtml({ name, className, code, frontendUrl = '' }) {
+  return `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#f8f5ee;border-radius:16px;padding:24px;color:#16302a"><h2 style="margin:0 0 8px">班級管理者代碼已核發</h2><p style="margin:0 0 16px;color:#666">${name}（${className}）：你的班級管理者代碼已審核通過。</p><div style="background:#fff;border-radius:12px;padding:20px;text-align:center;border:1px dashed #1c4a2e"><p style="margin:0 0 8px;font-size:12px;color:#888">一次性管理者代碼（僅顯示一次）</p><code style="font-size:24px;font-weight:800;letter-spacing:.12em;color:#1c4a2e">${code}</code></div><p style="margin:16px 0 0;font-size:13px;line-height:1.8;color:#5b6b7a">請到 ${frontendUrl} 的「註冊帳號」頁，選擇「班級管理者註冊」並輸入此代碼完成註冊。請勿將代碼貼到公開群組。</p></div>`;
+}

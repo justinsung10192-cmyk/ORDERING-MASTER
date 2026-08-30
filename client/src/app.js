@@ -265,7 +265,7 @@ function renderMerchantLoginForm() {
 }
 
 function renderMerchantRegisterForm() {
-  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-stamp">MERCHANT SIGNUP</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">店家合作註冊</h1><p class="mt-2 text-sm leading-6 text-slate-500">完成註冊後會寄出信箱驗證碼；「店家授權碼」可交給班級管理者綁定店家，或提供開發者協助設定菜單。</p>${configNote()}<form id="merchant-register-form" class="task-rule mt-5 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家名稱</span><input name="merchantName" required maxlength="60" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家地址</span><input name="address" maxlength="160" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><div class="grid grid-cols-2 gap-3"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家電話</span><input name="phone" type="tel" maxlength="20" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">負責人手機</span><input name="ownerPhone" type="tel" required maxlength="20" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label></div><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">負責人姓名</span><input name="ownerName" required maxlength="40" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">Email（登入帳號）</span><input name="email" type="email" required maxlength="120" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">密碼</span><input name="password" type="password" autocomplete="new-password" minlength="8" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" placeholder="至少 8 個字元" /></label><button class="w-full rounded-xl bg-stamp px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">註冊並寄驗證碼</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="merchantLogin" class="font-bold text-ledger underline underline-offset-4">←回到店家登入</button></div>`;
+  return `<p class="text-[11px] font-extrabold tracking-[.15em] text-stamp">MERCHANT SIGNUP</p><h1 class="mt-1 font-serif text-2xl font-black text-ledger">店家合作註冊</h1><p class="mt-2 text-sm leading-6 text-slate-500">完成註冊後會寄出信箱驗證碼；「店家授權碼」可交給班級管理者綁定店家，或提供開發者協助設定菜單。</p>${configNote()}<form id="merchant-register-form" class="task-rule mt-5 space-y-3 pt-5"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家名稱</span><input name="merchantName" required maxlength="60" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家地址</span><input name="address" maxlength="160" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><div class="grid grid-cols-2 gap-3"><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">店家電話</span><input name="phone" type="tel" maxlength="20" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">負責人手機</span><input name="ownerPhone" type="tel" required maxlength="20" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label></div><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">負責人姓名</span><input name="ownerName" required maxlength="40" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">Email（登入帳號）</span><input name="email" type="email" required maxlength="120" class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">密碼</span><input name="password" type="password" autocomplete="new-password" minlength="8" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" placeholder="至少 8 個字元" /></label><label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600">確認密碼</span><input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required class="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" placeholder="再輸入一次密碼" /></label><button class="w-full rounded-xl bg-stamp px-4 py-3.5 text-sm font-bold text-white shadow-paper" type="submit">註冊並寄驗證碼</button></form><div class="mt-5 flex justify-between text-sm"><button data-auth="merchantLogin" class="font-bold text-ledger underline underline-offset-4">←回到店家登入</button></div>`;
 }
 
 function renderMerchantVerifyForm() {
@@ -734,6 +734,9 @@ async function onClick(event) {
   if (action === 'browse-stores') return openStoreBrowserModal();
   if (action === 'pick-store') { const id = button.dataset.id; const hidden = $('#session-store-id'); if (hidden) hidden.value = id; const label = $('#session-store-label'); if (label) label.textContent = button.dataset.name; closeModal(); return; }
   if (action === 'manual-deduct') return openDeductModal(button.dataset.id);
+  if (action === 'delete-item') return confirmAdminItemDelete(button.dataset.id);
+  if (action === 'delete-option') return confirmAdminOptionDelete(button.dataset.id);
+  if (action === 'store-details') return openStoreDetailsModal(button.dataset.id);
   if (action === 'developer-approve-application') return confirmApplicationApprove(button.dataset.id);
   if (action === 'developer-reject-application') return confirmApplicationReject(button.dataset.id);
   if (action === 'developer-toggle-merchant') return developerToggleMerchant(button.dataset.id, button.dataset.disabled === 'true');
@@ -879,6 +882,7 @@ async function submitMerchantLogin(form) {
 
 async function submitMerchantRegister(form) {
   const data = formData(form);
+  if (!passwordsMatch(data.password, data.confirmPassword)) return toast('兩次輸入的密碼不一致。', 'error');
   await busy(form, async () => { const result = await api('merchantRegister', data); if (result.authorizationCode) window.__lastMerchantCode = result.authorizationCode; state.authMode = 'merchantVerify'; renderAuth(); toast(`${result.message || '請完成信箱驗證。'}${result.authorizationCode ? ' 店家授權碼：' + result.authorizationCode + '（請妥善保存，用於綁定店家）' : ''}`, 'success'); });
 }
 
@@ -1085,7 +1089,15 @@ async function autoRefreshTick() {
 
 async function logout() {
   try { if (state.token && apiConfigured()) await api('logout', {}, state.token, false); } catch (_) { /* 本機登出仍應完成。 */ }
-  clearSession(); clearVerificationTimer(); state.authMode = 'login'; renderAuth(); toast('已安全登出。', 'success');
+  // 登出時一併解除推播訂閱，避免已登出的使用者繼續收到班級通知
+  try {
+    const subscription = await currentPushSubscription();
+    if (subscription) {
+      await api('pushUnsubscribe', { endpoint: subscription.endpoint }, state.token, false).catch(() => {});
+      await subscription.unsubscribe().catch(() => {});
+    }
+  } catch (_) {}
+  clearSession(); clearVerificationTimer(); stopLunchCountdown(); state.authMode = 'login'; renderAuth(); toast('已安全登出。', 'success');
 }
 
 function openConfirmModal({ eyebrow, title, body, submitLabel, onConfirm }) {
@@ -1571,9 +1583,28 @@ function openStoreBrowserModal() {
   closeModal();
   const root = $('#modal-root');
   const stores = catalog.stores;
-  root.innerHTML = `<div class="fixed inset-0 z-50 flex items-end bg-ledger/60 p-3 sm:items-center sm:justify-center"><section class="modal-enter flex max-h-[85dvh] w-full max-w-md flex-col rounded-[1.5rem] bg-paper p-4 shadow-lift"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">PICK A STORE</p><h2 class="mt-1 font-serif text-xl font-black">選擇店家</h2><p class="mt-1 text-xs text-slate-500">查看店家資訊與菜單後選擇。</p><div class="mt-3 flex-1 space-y-3 overflow-y-auto pb-2">${stores.map(store => { const items = catalog.items.filter(item => item.storeId === store.storeId); const options = catalog.options; return `<article class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(store.name)}${store.isGlobal ? ' <span class="ml-1 rounded bg-ledger/10 px-1.5 py-0.5 text-[9px] font-black text-ledger">全體共用</span>' : ''}${store.businessHours ? ` <span class="text-[10px] font-normal text-slate-400">${escapeHtml(store.businessHours)}</span>` : ''}</p>${store.description ? `<p class="mt-0.5 text-[11px] leading-5 text-slate-500">${escapeHtml(store.description)}</p>` : ''}${store.contact ? `<p class="mt-0.5 text-[11px] text-slate-500">聯絡：${escapeHtml(store.contact)}</p>` : ''}</div><button data-action="pick-store" data-id="${escapeAttr(store.storeId)}" data-name="${escapeAttr(store.name)}" class="shrink-0 rounded-lg bg-ledger px-3 py-2 text-xs font-bold text-white">使用此店家</button></div>${items.length ? `<div class="mt-2 rounded-lg bg-paper px-2.5 py-2 text-[11px] leading-5 text-slate-600">${items.map(item => `${escapeHtml(item.name)} ${money(item.basePrice)}${options.filter(option => option.itemId === item.itemId).length ? '（' + options.filter(option => option.itemId === item.itemId).map(option => escapeHtml(option.name)).join('、') + '）' : ''}`).join(' · ')}</div>` : ''}</article>`; }).join('')}</div><button data-action="close-modal" class="mt-2 w-full rounded-xl bg-mist px-4 py-3 text-sm font-bold text-ledger">取消</button></section></div>`;
+  root.innerHTML = `<div class="fixed inset-0 z-50 flex items-end bg-ledger/60 p-3 sm:items-center sm:justify-center"><section class="modal-enter flex max-h-[85dvh] w-full max-w-md flex-col rounded-[1.5rem] bg-paper p-4 shadow-lift"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">PICK A STORE</p><h2 class="mt-1 font-serif text-xl font-black">選擇店家</h2><p class="mt-1 text-xs text-slate-500">店家數量多時可上下滑動瀏覽；點「詳細資訊」查看菜單。</p><div class="mt-3 flex-1 space-y-3 overflow-y-auto pb-2">${stores.map(store => { const items = catalog.items.filter(item => item.storeId === store.storeId); return `<article class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-ledger/5"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="text-sm font-black">${escapeHtml(store.name)}${store.isGlobal ? ' <span class="ml-1 rounded bg-ledger/10 px-1.5 py-0.5 text-[9px] font-black text-ledger">全體共用</span>' : ''}${store.businessHours ? ` <span class="text-[10px] font-normal text-slate-400">${escapeHtml(store.businessHours)}</span>` : ''}</p>${store.description ? `<p class="mt-0.5 text-[11px] leading-5 text-slate-500">${escapeHtml(store.description)}</p>` : ''}${store.contact ? `<p class="mt-0.5 text-[11px] text-slate-500">聯絡：${escapeHtml(store.contact)}</p>` : ''}</div><div class="flex shrink-0 flex-col gap-1.5"><button data-action="store-details" data-id="${escapeAttr(store.storeId)}" class="rounded-lg bg-mist px-3 py-2 text-[11px] font-bold text-ledger">詳細資訊</button><button data-action="pick-store" data-id="${escapeAttr(store.storeId)}" data-name="${escapeAttr(store.name)}" class="rounded-lg bg-ledger px-3 py-2 text-[11px] font-bold text-white">使用此店家</button></div></div><p class="mt-1 text-[10px] text-slate-400">共 ${items.length} 項品項</p></article>`; }).join('')}</div><button data-action="close-modal" class="mt-2 w-full rounded-xl bg-mist px-4 py-3 text-sm font-bold text-ledger">取消</button></section></div>`;
 }
 
+function openStoreDetailsModal(storeId) {
+  const catalog = state.admin.catalog;
+  const store = catalog?.stores?.find(item => item.storeId === storeId);
+  if (!store) return;
+  const items = (catalog.items || []).filter(item => item.storeId === storeId);
+  const options = catalog.options || [];
+  closeModal();
+  const root = $('#modal-root');
+  root.innerHTML = `<div class="fixed inset-0 z-50 flex items-end bg-ledger/60 p-3 sm:items-center sm:justify-center"><section class="modal-enter flex max-h-[85dvh] w-full max-w-md flex-col rounded-[1.5rem] bg-paper p-4 shadow-lift"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">STORE DETAILS</p><h2 class="mt-1 font-serif text-xl font-black">${escapeHtml(store.name)}</h2>${store.description ? `<p class="mt-2 text-sm leading-6 text-slate-600">${escapeHtml(store.description)}</p>` : ''}<div class="mt-2 space-y-1 text-xs text-slate-500">${store.contact ? `<p>聯絡：${escapeHtml(store.contact)}</p>` : ''}${store.businessHours ? `<p>營業時間：${escapeHtml(store.businessHours)}</p>` : ''}</div><div class="mt-3 flex-1 space-y-2 overflow-y-auto pb-2">${items.length ? items.map(item => `<div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-ledger/5"><div class="flex justify-between text-sm"><b>${escapeHtml(item.name)}</b><span>${money(item.basePrice)}</span></div>${options.filter(option => option.itemId === item.itemId).length ? `<p class="mt-1 text-[11px] text-slate-500">${options.filter(option => option.itemId === item.itemId).map(option => `${escapeHtml(option.name)} (${signedMoney(option.priceAdjustment)})`).join(' · ')}</p>` : ''}</div>`).join('') : '<p class="rounded-xl bg-white px-4 py-6 text-center text-xs text-slate-400">這間店家還沒有餐點。</p>'}</div><div class="mt-2 flex gap-2"><button data-action="pick-store" data-id="${escapeAttr(store.storeId)}" data-name="${escapeAttr(store.name)}" class="flex-1 rounded-xl bg-ledger px-4 py-3 text-sm font-bold text-white">使用此店家</button><button data-action="close-modal" class="rounded-xl bg-mist px-4 py-3 text-sm font-bold text-ledger">關閉</button></div></section></div>`;
+}
+
+function confirmAdminItemDelete(itemId) {
+  const item = state.admin.catalog?.items?.find(entry => entry.itemId === itemId);
+  openConfirmModal({ eyebrow: 'DELETE ITEM', title: `刪除餐點「${item ? item.name : ''}」？`, body: '<p>已有訂單使用的餐點無法刪除。</p>', submitLabel: '確認刪除', onConfirm: async () => { await api('adminDeleteMenuItem', { itemId }); closeModal(); state.admin.catalog = null; await renderAdminCatalog($('#admin-content')); toast('餐點已刪除。', 'success'); } });
+}
+
+function confirmAdminOptionDelete(optionId) {
+  openConfirmModal({ eyebrow: 'DELETE OPTION', title: '刪除客製選項？', body: '<p>已有訂單使用的選項無法刪除。</p>', submitLabel: '確認刪除', onConfirm: async () => { await api('adminDeleteItemOption', { optionId }); closeModal(); state.admin.catalog = null; await renderAdminCatalog($('#admin-content')); toast('選項已刪除。', 'success'); } });
+}
 function openDeductModal(userId) {
   const user = state.admin.users.find(item => item.id === userId);
   if (!user) return;
@@ -1591,10 +1622,10 @@ function openDeductModal(userId) {
 }
 
 function confirmApplicationApprove(applicationId) {
-  openConfirmModal({ eyebrow: 'APPROVE', title: '核准此申請並核發管理者代碼？', body: '<p>核准後會產生一組一次性班級管理者代碼，需立即複製並私下交給申請人。</p>', submitLabel: '核准並核發', onConfirm: async () => {
+  openConfirmModal({ eyebrow: 'APPROVE', title: '核准此申請？', body: '<p>核准後系統會自動產生一組管理者代碼，並<strong>寄送至申請人的 Email</strong>。</p>', submitLabel: '核准並寄送代碼', onConfirm: async () => {
     const result = await developerApi('developerApproveApplication', { applicationId });
     closeModal();
-    openCodeRevealModal({ eyebrow: 'ONE-TIME CLASS ACCESS', title: '班級管理者代碼已核發', code: result.code, note: '<p class="text-sm leading-6 text-slate-600">請立即複製並私下交給申請人，由其完成班級管理者註冊。</p>' });
+    toast(result.emailed ? '已核准，管理者代碼已寄送至申請人信箱。' : '已核准，但代碼寄送失敗（請檢查郵件設定）。', result.emailed ? 'success' : 'error');
     renderDeveloperApplications($('#developer-content'));
   } });
 }
