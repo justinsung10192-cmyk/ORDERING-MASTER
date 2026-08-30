@@ -413,6 +413,7 @@ function renderNav() {
 
 function renderView() {
   if (!state.user) return;
+  const scrollY = window.scrollY; // 記錄捲動位置，防止背景更新時頁面跳動
   const root = $('#view');
   const templateName = state.view === 'lunch' ? 'lunch-view' : state.view === 'verify' ? 'verify-view' : state.view === 'wallet' ? 'wallet-view' : state.view === 'admin' ? 'admin-view' : 'settings-view';
   root.innerHTML = htmlFromTemplate(templateName);
@@ -421,6 +422,7 @@ function renderView() {
   if (state.view === 'wallet') renderWallet();
   if (state.view === 'admin') renderAdmin();
   if (state.view === 'settings') renderSettings();
+  window.scrollTo(0, scrollY); // 恢復捲動位置
 }
 
 function renderLunch() {
@@ -1130,6 +1132,10 @@ async function autoRefreshTick() {
     } catch (_) {}
     return;
   }
+
+  // 核心保護：如果學生正開著「憑證 QR Code」頁面，絕對不要在背景同步！
+  // 否則背景刷新會重新呼叫後端 API 產生新的 Token 繪製新的 QR Code，導致剛好在掃碼的管理員相機讀到不匹配的舊資料。
+  if (state.view === 'verify') return;
 
   if (!state.token || !apiConfigured() || document.hidden || state.operationPending || state.confirmAction || state.scannerMode) return;
   if (state.view === 'admin' && (state.admin.scanResult || document.querySelector('#scanner-container'))) return;
