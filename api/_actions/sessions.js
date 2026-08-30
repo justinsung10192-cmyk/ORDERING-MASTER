@@ -1,6 +1,6 @@
 // 動作：場次管理（建立、改截止、提前結束、刪除）＋推播通知
 import { appError, sid, num } from '../_lib/util.js';
-import { findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows } from '../_lib/db.js';
+import { findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, findStoreForClass } from '../_lib/db.js';
 import { sendPushToClass, sendPushToUser } from '../_lib/push.js';
 
 function formatTime(iso) {
@@ -10,7 +10,7 @@ function formatTime(iso) {
 
 export const actions = {
   async adminSaveSession(data, ctx) {
-    const store = await findOne('stores', { id: Number(data.storeId) }, ctx.classId);
+    const store = await findStoreForClass(Number(data.storeId), ctx.classId);
     if (!store) throw appError('NOT_FOUND', '店家不存在。');
     const orderDate = String(data.orderDate || '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(orderDate)) throw appError('INVALID_INPUT', '請選擇訂餐日期。');

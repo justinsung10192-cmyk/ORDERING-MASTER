@@ -95,6 +95,24 @@ export async function callRpc(name, params = {}) {
 }
 
 // 目前所有讀寫皆經由 API 的 service role 進行（RLS 關閉也不影響安全）。
+// 班級可用的店家 = 本班店家 + 全體共用店家
+
+export async function listStoresForClass(classId) {
+  const { data, error } = await supabase
+    .from('stores')
+    .select('*')
+    .or(`class_id.eq.${classId},is_global.eq.true`)
+    .order('sort_order');
+  if (error) throwDb(error);
+  return data || [];
+}
+
+export async function findStoreForClass(storeId, classId) {
+  const store = await findOne('stores', { id: Number(storeId) });
+  if (!store) return null;
+  if (String(store.class_id) === String(classId) || store.is_global) return store;
+  return null;
+}
 export async function getAppSetting(classId, key, defaultValue = '') {
   const row = await findOne('app_settings', { class_id: classId, key });
   return row ? row.value : defaultValue;

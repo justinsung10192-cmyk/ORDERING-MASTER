@@ -1,6 +1,6 @@
 // 序列化層：把資料庫列轉成前端需要的 JSON 格式（所有 id 字串化）
 import { sid, num, round2, todayString } from './util.js';
-import { supabase, listRows, listRowsIn, findOne } from './db.js';
+import { supabase, listRows, listRowsIn, findOne, listStoresForClass, findStoreForClass } from './db.js';
 
 export function publicUser(user) {
   return {
@@ -95,7 +95,7 @@ export function computeOrderItems(menuItems, selections) {
 }
 
 export async function loadSessionWithMenu(session) {
-  const store = await findOne('stores', { id: session.store_id }, session.class_id);
+  const store = await findStoreForClass(session.store_id, session.class_id);
   const menuItems = await listRows('menu_items', {
     classId: session.class_id,
     filters: { store_id: session.store_id, is_active: true },

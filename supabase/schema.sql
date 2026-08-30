@@ -43,6 +43,9 @@ create table if not exists public.stores (
   id         bigint generated always as identity primary key,
   class_id   text not null references public.classes(class_id) on delete cascade,
   name       text not null,
+  description text not null default '',
+  contact    text not null default '',
+  is_global  boolean not null default false,
   is_active  boolean not null default true,
   sort_order int not null default 0,
   created_at timestamptz not null default now()

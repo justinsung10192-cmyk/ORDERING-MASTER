@@ -1,6 +1,6 @@
 // 動作：管理員（儀表板、菜單、帳號、設定、邀請碼）
 import { appError, sid, num, round2, sha256Hex, todayString } from '../_lib/util.js';
-import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting } from '../_lib/db.js';
+import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting, listStoresForClass } from '../_lib/db.js';
 import { bumpAuthVersion, createInviteCodeValue } from '../_lib/auth.js';
 import { outstandingOf, dashboardOrderRow } from '../_lib/serialize.js';
 import { mailConfigured } from '../_lib/mail.js';
@@ -14,7 +14,7 @@ export const actions = {
     const userIds = [...new Set(orders.map(order => String(order.user_id)).filter(Boolean))];
     const users = userIds.length ? await listRowsIn('users', 'id', userIds.map(Number), { classId }) : [];
     const userById = new Map(users.map(user => [String(user.id), user]));
-    const storeById = new Map((await listRows('stores', { classId })).map(store => [String(store.id), store]));
+    const storeById = new Map((await listStoresForClass(ctx.classId)).map(store => [String(store.id), store]));
     const sessionById = new Map(sessions.map(session => [String(session.id), session]));
 
     let totalMeals = 0;
@@ -95,12 +95,14 @@ export const actions = {
   },
 
   async adminCatalog(_data, ctx) {
-    const stores = await listRows('stores', { classId: ctx.classId, order: 'sort_order' });
-    const items = await listRows('menu_items', { classId: ctx.classId, order: 'sort_order' });
-    const options = await listRows('item_options', { classId: ctx.classId, order: 'sort_order' });
+    const stores = await listStoresForClass(ctx.classId);
+    const storeIds = stores.map(store => store.id);
+    const items = storeIds.length ? await listRowsIn('menu_items', 'store_id', storeIds) : [];
+    const itemIds = items.map(item => item.id);
+    const options = itemIds.length ? await listRowsIn('item_options', 'menu_item_id', itemIds) : [];
     const sessions = await listRows('sessions', { classId: ctx.classId, order: 'order_date' });
     return {
-      stores: stores.map(store => ({ storeId: sid(store.id), name: store.name, isActive: store.is_active })),
+      stores: stores.map(store => ({ storeId: sid(store.id), name: store.name, description: store.description || '', contact: store.contact || '', isGlobal: Boolean(store.is_global), isActive: store.is_active })),
       items: items.map(item => ({ storeId: sid(item.store_id), itemId: sid(item.id), name: item.name, basePrice: num(item.price) })),
       options: options.map(option => ({
         itemId: sid(option.menu_item_id),
@@ -120,15 +122,26 @@ export const actions = {
   },
 
   async adminSaveStore(data, ctx) {
+    const storeId = Number(data.storeId) || null;
     const name = String(data.name || '').trim();
     if (!name) throw appError('INVALID_INPUT', '請輸入店家名稱。');
-    await insertRow('stores', { class_id: ctx.classId, name });
+    const description = String(data.description || '').trim().slice(0, 200);
+    const contact = String(data.contact || '').trim().slice(0, 120);
+    if (storeId) {
+      const store = await findOne('stores', { id: storeId }, ctx.classId);
+      if (!store) throw appError('NOT_FOUND', '店家不存在。');
+      if (store.is_global) throw appError('FORBIDDEN', '全體共用店家由開發者管理。');
+      await updateRows('stores', { id: store.id }, { name, description, contact });
+    } else {
+      await insertRow('stores', { class_id: ctx.classId, name, description, contact });
+    }
     return { ok: true };
   },
 
   async adminSaveMenuItem(data, ctx) {
     const store = await findOne('stores', { id: Number(data.storeId) }, ctx.classId);
     if (!store) throw appError('NOT_FOUND', '店家不存在。');
+    if (store.is_global) throw appError('FORBIDDEN', '全體共用店家由開發者管理。');
     const name = String(data.name || '').trim();
     const basePrice = Number(data.basePrice);
     if (!name) throw appError('INVALID_INPUT', '請輸入餐點名稱。');
@@ -151,6 +164,7 @@ export const actions = {
   async adminDeleteStore(data, ctx) {
     const store = await findOne('stores', { id: Number(data.storeId) }, ctx.classId);
     if (!store) throw appError('NOT_FOUND', '店家不存在。');
+    if (store.is_global) throw appError('FORBIDDEN', '全體共用店家由開發者管理。');
     const sessions = await listRows('sessions', { classId: ctx.classId, filters: { store_id: store.id } });
     const orderCount = await countOrdersOfSessions(sessions, ctx.classId);
     if (orderCount > 0) throw appError('PROTECTED', '此店家已有訂單紀錄，基於帳務保護無法刪除。');

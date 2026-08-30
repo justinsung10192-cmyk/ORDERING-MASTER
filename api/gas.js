@@ -54,6 +54,13 @@ const DEVELOPER = new Set([
   'developerSetMaintenance',
   'developerListDevelopers',
   'developerDeleteDeveloper',
+  'developerListMenu',
+  'developerSaveStore',
+  'developerDeleteStore',
+  'developerSaveMenuItem',
+  'developerSaveItemOption',
+  'developerDeleteMenuItem',
+  'developerDeleteItemOption',
 ]);
 
 const ADMIN = new Set([

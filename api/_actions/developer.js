@@ -1,7 +1,7 @@
 // 動作：開發者工作台（班級管理者代碼、跨班級帳號管理、系統設定）
 import { randomBytes } from 'node:crypto';
 import { appError, sid, num, sha256Hex, randomDigits } from '../_lib/util.js';
-import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, getAppSetting, setAppSetting } from '../_lib/db.js';
+import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting } from '../_lib/db.js';
 import { verifyPassword, createPassword, createDeveloperSession, destroySession, bumpAuthVersion, createClassAdminCodeValue } from '../_lib/auth.js';
 import { mailConfigured, sendMail, verificationEmailHtml, developerLoginAlertHtml } from '../_lib/mail.js';
 import { sendPushToAll } from '../_lib/push.js';
@@ -209,10 +209,95 @@ export const actions = {
     const target = await findOne('developers', { id: Number(data.developerId) });
     if (!target) throw appError('NOT_FOUND', '找不到開發者帳號。');
     if (target.id === ctx.developer.id) throw appError('PROTECTED', '不能刪除自己正在使用的開發者帳號。');
-    const count = await countWhere('developers', {});
+    const count = await countRows('developers', {});
     if (count <= 1) throw appError('PROTECTED', '系統至少需要保留一位開發者。');
     await deleteRows('developers', { id: target.id });
     return { ok: true, message: `開發者 ${target.username} 已刪除。` };
+  },
+
+  async developerListMenu() {
+    const { data: stores, error } = await supabase.from('stores').select('*').eq('is_global', true).order('sort_order');
+    if (error) throw new Error('讀取全體菜單失敗。');
+    const items = stores.length ? await listRowsIn('menu_items', 'store_id', stores.map(store => store.id)) : [];
+    const options = items.length ? await listRowsIn('item_options', 'menu_item_id', items.map(item => item.id)) : [];
+    return {
+      stores: stores.map(store => ({ storeId: sid(store.id), name: store.name, description: store.description || '', contact: store.contact || '', isActive: store.is_active })),
+      items: items.map(item => ({ storeId: sid(item.store_id), itemId: sid(item.id), name: item.name, basePrice: num(item.price) })),
+      options: options.map(option => ({ itemId: sid(option.menu_item_id), optionId: sid(option.id), name: option.name, priceAdjustment: num(option.price), maxSelect: num(option.max_select) })),
+    };
+  },
+
+  async developerSaveStore(data) {
+    const storeId = Number(data.storeId) || null;
+    const name = String(data.name || '').trim();
+    if (!name) throw appError('INVALID_INPUT', '請輸入店家名稱。');
+    const description = String(data.description || '').trim().slice(0, 200);
+    const contact = String(data.contact || '').trim().slice(0, 120);
+    if (storeId) {
+      const store = await findOne('stores', { id: storeId });
+      if (!store || !store.is_global) throw appError('NOT_FOUND', '全體店家不存在。');
+      await updateRows('stores', { id: store.id }, { name, description, contact });
+    } else {
+      await insertRow('stores', { class_id: 'global', name, description, contact, is_global: true });
+    }
+    return { ok: true };
+  },
+
+  async developerDeleteStore(data) {
+    const store = await findOne('stores', { id: Number(data.storeId) });
+    if (!store || !store.is_global) throw appError('NOT_FOUND', '全體店家不存在。');
+    const { data: storeSessions } = await supabase.from('sessions').select('id').eq('store_id', store.id).limit(1);
+    if (storeSessions && storeSessions.length) throw appError('PROTECTED', '此全體店家已被場次使用，無法刪除。');
+    await deleteRows('stores', { id: store.id });
+    return { ok: true };
+  },
+
+  async developerSaveMenuItem(data) {
+    const store = await findOne('stores', { id: Number(data.storeId) });
+    if (!store || !store.is_global) throw appError('NOT_FOUND', '全體店家不存在。');
+    const name = String(data.name || '').trim();
+    const basePrice = Number(data.basePrice);
+    if (!name) throw appError('INVALID_INPUT', '請輸入餐點名稱。');
+    if (!Number.isFinite(basePrice) || basePrice < 0 || basePrice > 100000) throw appError('INVALID_INPUT', '餐點價格不正確。');
+    await insertRow('menu_items', { class_id: 'global', store_id: store.id, name, price: basePrice });
+    return { ok: true };
+  },
+
+  async developerSaveItemOption(data) {
+    const item = await findOne('menu_items', { id: Number(data.itemId) });
+    if (!item) throw appError('NOT_FOUND', '餐點不存在。');
+    const store = await findOne('stores', { id: item.store_id });
+    if (!store || !store.is_global) throw appError('FORBIDDEN', '僅能為全體共用餐點新增選項。');
+    const name = String(data.name || '').trim();
+    const priceAdjustment = Number(data.priceAdjustment);
+    if (!name) throw appError('INVALID_INPUT', '請輸入選項名稱。');
+    if (!Number.isFinite(priceAdjustment)) throw appError('INVALID_INPUT', '選項差額不正確。');
+    await insertRow('item_options', { class_id: 'global', store_id: store.id, menu_item_id: item.id, name, price: priceAdjustment, max_select: Number(data.maxSelect) || 1 });
+    return { ok: true };
+  },
+
+  async developerDeleteMenuItem(data) {
+    const item = await findOne('menu_items', { id: Number(data.itemId) });
+    if (!item) throw appError('NOT_FOUND', '餐點不存在。');
+    const store = await findOne('stores', { id: item.store_id });
+    if (!store || !store.is_global) throw appError('FORBIDDEN', '僅能刪除全體共用餐點。');
+    const { data: orders } = await supabase.from('orders').select('items').limit(1000);
+    const inUse = (orders || []).some(order => (order.items || []).some(entry => String(entry.itemId) === String(item.id)));
+    if (inUse) throw appError('PROTECTED', '此餐點已有訂單使用，基於帳務保護無法刪除。');
+    await deleteRows('menu_items', { id: item.id });
+    return { ok: true };
+  },
+
+  async developerDeleteItemOption(data) {
+    const option = await findOne('item_options', { id: Number(data.optionId) });
+    if (!option) throw appError('NOT_FOUND', '選項不存在。');
+    const store = await findOne('stores', { id: option.store_id });
+    if (!store || !store.is_global) throw appError('FORBIDDEN', '僅能刪除全體共用選項。');
+    const { data: orders } = await supabase.from('orders').select('items').limit(1000);
+    const inUse = (orders || []).some(order => (order.items || []).some(entry => (entry.selectedOptions || []).some(optionEntry => String(optionEntry.optionId) === String(option.id))));
+    if (inUse) throw appError('PROTECTED', '此選項已有訂單使用，基於帳務保護無法刪除。');
+    await deleteRows('item_options', { id: option.id });
+    return { ok: true };
   },
 
   async developerGetSettings() {

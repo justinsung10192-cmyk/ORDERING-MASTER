@@ -1,6 +1,6 @@
 // 動作：錢包歷史、管理員儲值、現金結清
 import { appError, sid, num, round2 } from '../_lib/util.js';
-import { findOne, listRows, listRowsIn, callRpc } from '../_lib/db.js';
+import { findOne, listRows, listRowsIn, callRpc, listStoresForClass } from '../_lib/db.js';
 import { publicUser, outstandingOf } from '../_lib/serialize.js';
 
 export const actions = {
@@ -20,8 +20,7 @@ export const actions = {
     const recentSessionIds = [...new Set(recentOrders.map(order => order.session_id))];
     const recentSessions = recentSessionIds.length ? await listRowsIn('sessions', 'id', recentSessionIds, { classId: ctx.classId }) : [];
     const recentSessionById = new Map(recentSessions.map(session => [String(session.id), session]));
-    const recentStoreIds = [...new Set(recentSessions.map(session => session.store_id))];
-    const recentStores = recentStoreIds.length ? await listRowsIn('stores', 'id', recentStoreIds, { classId: ctx.classId }) : [];
+    const recentStores = await listStoresForClass(ctx.classId);
     const recentStoreById = new Map(recentStores.map(store => [String(store.id), store]));
 
     return {

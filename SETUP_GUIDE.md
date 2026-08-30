@@ -103,7 +103,12 @@ select cron.schedule(
 > alter table public.developers add column if not exists blocked_until timestamptz;
 > alter table public.auth_tokens add column if not exists developer_id bigint references public.developers(id) on delete cascade;
 > ```
-> （若先前曾執行過管理員版 `admin_blocked_until`，可忽略，或執行 `alter table public.users drop column if exists admin_blocked_until;` 清除）
+> **升級提醒 3**：全體共用菜單與店家資訊需要以下欄位，請額外執行：
+> ```sql
+> alter table public.stores add column if not exists description text not null default '';
+> alter table public.stores add column if not exists contact text not null default '';
+> alter table public.stores add column if not exists is_global boolean not null default false;
+> ```
 
 ## 第 6 步：建立第一個帳號（開發者）
 
