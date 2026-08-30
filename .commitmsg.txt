@@ -1,1 +1,0 @@
-寄信改為 Gmail SMTP：驗證信與重設信不再需要 Resend 網域
