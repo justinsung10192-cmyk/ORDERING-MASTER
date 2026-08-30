@@ -46,6 +46,7 @@ const DEVELOPER = new Set([
   'developerGetUserDetails',
   'developerSetUserDisabled',
   'developerDeleteUser',
+  'developerGetEmailDiagnostics',
 ]);
 
 const ADMIN = new Set([

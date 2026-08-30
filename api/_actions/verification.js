@@ -1,5 +1,5 @@
-// 動作：產生 QR 驗證憑證、掃碼核對、確認取餐
-import { appError, sid, num, round2, randomDigits, todayString } from '../_lib/util.js';
+// 動作：產生 QR 驗證憑證、掃碼核對（含 PIN 替代輸入）、確認取餐
+import { appError, sid, num, round2, randomDigits, todayString, sha256Hex } from '../_lib/util.js';
 import { findOne, listRows, listRowsIn, insertRow, updateRows } from '../_lib/db.js';
 import { outstandingOf, itemNameOf } from '../_lib/serialize.js';
 import { sendPushToUser } from '../_lib/push.js';
@@ -21,6 +21,47 @@ function scanOrderShape(order, session) {
   };
 }
 
+// 共用：依已驗證的 payload 解析學生、訂單與待收金額（掃碼與 PIN 皆使用）
+async function resolveByPayload(mode, payload, ctx) {
+  const student = await findOne('users', { id: Number(payload.uid) }, ctx.classId);
+  if (!student) throw appError('NOT_FOUND', '找不到學生帳號。');
+
+  let orders = [];
+  let outstandingAmount = 0;
+  const walletBalance = num(student.wallet_balance);
+
+  if (mode === 'pickup') {
+    const sessions = await listRows('sessions', { classId: ctx.classId, filters: { order_date: todayString() } });
+    const sessionIds = sessions.map(session => session.id);
+    const userOrders = sessionIds.length
+      ? (await listRowsIn('orders', 'session_id', sessionIds, { classId: ctx.classId })).filter(
+          order => String(order.user_id) === String(student.id) && order.pickup_status !== 'PickedUp',
+        )
+      : [];
+    const sessionById = new Map(sessions.map(session => [String(session.id), session]));
+    orders = userOrders.map(order => scanOrderShape(order, sessionById.get(String(order.session_id))));
+  } else if (mode === 'checkout') {
+    const userOrders = await listRows('orders', { classId: ctx.classId, filters: { user_id: student.id } });
+    const unpaid = userOrders.filter(order => outstandingOf(order) > 0);
+    const sessionIds = [...new Set(unpaid.map(order => order.session_id))];
+    const sessions = sessionIds.length ? await listRowsIn('sessions', 'id', sessionIds, { classId: ctx.classId }) : [];
+    const sessionById = new Map(sessions.map(session => [String(session.id), session]));
+    orders = unpaid.map(order => scanOrderShape(order, sessionById.get(String(order.session_id))));
+    outstandingAmount = round2(unpaid.reduce((sum, order) => sum + outstandingOf(order), 0));
+  } else {
+    const userOrders = await listRows('orders', { classId: ctx.classId, filters: { user_id: student.id } });
+    outstandingAmount = round2(userOrders.reduce((sum, order) => sum + outstandingOf(order), 0));
+  }
+
+  return {
+    mode,
+    student: { id: sid(student.id), name: student.student_name, studentNo: student.student_no, seatNo: student.seat_no },
+    orders,
+    outstandingAmount,
+    walletBalance,
+  };
+}
+
 export const actions = {
   async createVerification(data, ctx) {
     const type = String(data.type || '');
@@ -32,6 +73,7 @@ export const actions = {
       class_id: ctx.classId,
       user_id: ctx.user.id,
       payload: JSON.stringify(payload),
+      pin_hash: sha256Hex(pin),
       status: 'Pending',
       expires_at: new Date(exp).toISOString(),
     });
@@ -56,44 +98,30 @@ export const actions = {
     if (!storedPayload || String(storedPayload.pin) !== String(payload.pin)) throw appError('INVALID_QR', 'PIN 碼不正確。');
 
     await updateRows('verification_records', { id: record.id }, { status: 'Resolved', resolved_at: new Date().toISOString() });
+    return resolveByPayload(mode, payload, ctx);
+  },
 
-    const student = await findOne('users', { id: Number(payload.uid) }, ctx.classId);
-    if (!student) throw appError('NOT_FOUND', '找不到學生帳號。');
+  // 相機無法使用時，以 6 位 PIN 取代 QR 驗證
+  async adminResolvePin(data, ctx) {
+    const mode = String(data.mode || '');
+    const pin = String(data.pin || '').trim();
+    if (!/^\d{6}$/.test(pin)) throw appError('INVALID_PIN', '請輸入 6 位數 PIN 碼。');
+    if (!['pickup', 'checkout', 'topup'].includes(mode)) throw appError('INVALID_PIN', '不支援的作業類型。');
 
-    let orders = [];
-    let outstandingAmount = 0;
-    const walletBalance = num(student.wallet_balance);
+    const record = await findOne('verification_records', { class_id: ctx.classId, pin_hash: sha256Hex(pin), status: 'Pending' });
+    if (!record) throw appError('INVALID_PIN', '找不到對應的 PIN，或此 PIN 已失效。');
+    if (new Date(record.expires_at).getTime() < Date.now()) throw appError('EXPIRED', '此 PIN 已過期，請學生重新產生。');
 
-    if (mode === 'pickup') {
-      const sessions = await listRows('sessions', { classId: ctx.classId, filters: { order_date: todayString() } });
-      const sessionIds = sessions.map(session => session.id);
-      const userOrders = sessionIds.length
-        ? (await listRowsIn('orders', 'session_id', sessionIds, { classId: ctx.classId })).filter(
-            order => String(order.user_id) === String(student.id) && order.pickup_status !== 'PickedUp',
-          )
-        : [];
-      const sessionById = new Map(sessions.map(session => [String(session.id), session]));
-      orders = userOrders.map(order => scanOrderShape(order, sessionById.get(String(order.session_id))));
-    } else if (mode === 'checkout') {
-      const userOrders = await listRows('orders', { classId: ctx.classId, filters: { user_id: student.id } });
-      const unpaid = userOrders.filter(order => outstandingOf(order) > 0);
-      const sessionIds = [...new Set(unpaid.map(order => order.session_id))];
-      const sessions = sessionIds.length ? await listRowsIn('sessions', 'id', sessionIds, { classId: ctx.classId }) : [];
-      const sessionById = new Map(sessions.map(session => [String(session.id), session]));
-      orders = unpaid.map(order => scanOrderShape(order, sessionById.get(String(order.session_id))));
-      outstandingAmount = round2(unpaid.reduce((sum, order) => sum + outstandingOf(order), 0));
-    } else {
-      const userOrders = await listRows('orders', { classId: ctx.classId, filters: { user_id: student.id } });
-      outstandingAmount = round2(userOrders.reduce((sum, order) => sum + outstandingOf(order), 0));
+    let payload = null;
+    try { payload = JSON.parse(record.payload); } catch (_) { /* 忽略 */ }
+    if (!payload || !['pickup', 'checkout', 'topup'].includes(payload.type)) throw appError('INVALID_PIN', 'PIN 資料不正確。');
+    if (payload.type !== mode) {
+      const label = payload.type === 'pickup' ? '取餐' : payload.type === 'checkout' ? '結帳' : '儲值';
+      throw appError('INVALID_PIN', `此 PIN 是「${label}」用途，與目前作業不符。`);
     }
 
-    return {
-      mode,
-      student: { id: sid(student.id), name: student.student_name, studentNo: student.student_no, seatNo: student.seat_no },
-      orders,
-      outstandingAmount,
-      walletBalance,
-    };
+    await updateRows('verification_records', { id: record.id }, { status: 'Resolved', resolved_at: new Date().toISOString() });
+    return resolveByPayload(mode, payload, ctx);
   },
 
   async adminConfirmPickup(data, ctx) {

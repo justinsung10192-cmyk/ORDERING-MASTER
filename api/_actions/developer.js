@@ -1,9 +1,8 @@
 // 動作：開發者工作台（班級管理者代碼、跨班級帳號管理、系統設定）
 import { appError, sid, num, sha256Hex } from '../_lib/util.js';
 import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, getAppSetting, setAppSetting } from '../_lib/db.js';
-import {
-  verifyPassword, createPassword, createDeveloperSession, destroySession, bumpAuthVersion, createClassAdminCodeValue,
-} from '../_lib/auth.js';
+import { verifyPassword, createPassword, createDeveloperSession, destroySession, bumpAuthVersion, createClassAdminCodeValue } from '../_lib/auth.js';
+import { mailConfigured } from '../_lib/mail.js';
 
 function publicDeveloper(developer) {
   return { username: developer.username, name: developer.username, email: developer.email };
@@ -133,16 +132,22 @@ export const actions = {
   },
 
   async developerGetSettings() {
-    return { hasAuthorizationCode: Boolean(await getAppSetting('', 'admin_auth_code', '')) };
+    return {};
   },
 
-  async developerSaveSettings(data) {
-    const code = String(data.newAuthorizationCode || '').trim();
-    if (code) {
-      if (code.length < 8) throw appError('INVALID_INPUT', '管理員升級授權碼至少須為 8 個字元。');
-      await setAppSetting('', 'admin_auth_code', sha256Hex(code));
-    }
+  async developerSaveSettings() {
     return { ok: true };
+  },
+
+  async developerGetEmailDiagnostics() {
+    const configured = mailConfigured();
+    return {
+      message: configured
+        ? `郵件服務正常（Gmail SMTP：${process.env.SMTP_USER}，僅用於驗證信與重設信）。`
+        : '郵件服務尚未設定（請設定 SMTP_USER / SMTP_PASS，並在 Gmail 產生應用程式密碼）。',
+      gmailAuthorized: configured,
+      remainingDailyQuota: configured ? 500 : 0,
+    };
   },
 };
 

@@ -127,17 +127,6 @@ export const actions = {
     return { ok: true };
   },
 
-  async upgradeAdmin(data, ctx) {
-    const expected = await getAppSetting('', 'admin_auth_code', '');
-    if (!expected || !data.authorizationCode) throw appError('INVALID_CODE', '系統授權碼不正確。');
-    if (sha256Hex(String(data.authorizationCode)) !== expected) throw appError('INVALID_CODE', '系統授權碼不正確。');
-    await updateRows('users', { id: ctx.user.id }, { role: 'Admin' });
-    await bumpAuthVersion(ctx.user.id);
-    const updated = await findOne('users', { id: ctx.user.id });
-    const token = await createSession(updated);
-    return { token, user: publicUser(updated) };
-  },
-
   async getBootstrap(_data, ctx) {
     const { sessions, orders } = await loadOpenSessions(ctx.user);
     return { user: publicUser(ctx.user), sessions, orders };

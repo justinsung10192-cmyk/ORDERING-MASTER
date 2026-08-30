@@ -139,8 +139,7 @@ function renderDeveloperView() {
 }
 
 function renderDeveloperSettings(root) {
-  const settings = state.developerSettings || {};
-  root.innerHTML = `<form id="developer-settings-form" class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SYSTEM OWNER SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">開發者系統設定</h2><p class="mt-2 text-sm leading-6 text-slate-500">這裡只放跨班級的系統與安全設定。班級 Email 後綴不在此處修改，請由各班管理者到自己的設定頁調整。</p><div class="mt-4 space-y-3"><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">管理員升級授權碼</span><input name="newAuthorizationCode" type="password" minlength="8" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger" placeholder="${settings.hasAuthorizationCode ? '已設定；留白則不變更' : '至少 8 個字元'}" autocomplete="new-password"/></label><p class="rounded-xl bg-mist px-3 py-3 text-xs leading-5 text-slate-500">目前管理員升級授權碼：${settings.hasAuthorizationCode ? '已設定' : '尚未設定'}。開發者金鑰只可在 Apps Script 指令碼屬性管理，不會顯示或由此頁修改。</p><p class="rounded-xl bg-[#FFF8EC] px-3 py-3 text-xs leading-5 text-[#805820]">Email 後綴設定範圍：每個班級獨立。班級管理者修改後，只影響該班新功能說明與該班設定，不會覆蓋其他班級。</p><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white">儲存開發者設定</button></div></form>`;
+  root.innerHTML = `<div class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SYSTEM OWNER SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">開發者系統設定</h2><p class="mt-2 text-sm leading-6 text-slate-500">跨班級的系統與安全設定。各班管理者由各班在「帳號」頁自行維護，開發者不需介入。</p><section class="mt-4 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">郵件服務檢查（驗證信／重設信）</p><p id="developer-email-diagnostics" class="mt-1 text-xs leading-5 text-slate-500">檢查 Gmail SMTP 授權與寄送狀態。</p><button type="button" data-action="developer-check-email" class="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10">檢查郵件服務</button></section></div>`;
 }
 
 function renderDeveloperCodes(root) {
@@ -517,7 +516,7 @@ async function renderAdminUsers(root) {
 
 function renderUserList() {
   const root = $('#user-list'); if (!root) return;
-  root.innerHTML = `<div class="space-y-2">${state.admin.users.map(u => `<article class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold ${u.isDisabled ? 'text-slate-400 line-through' : ''}">${escapeHtml(u.seatNo)}號 ${escapeHtml(u.name)} ${u.role === 'Admin' ? '<span class="ml-1 text-[10px] text-ledger">ADMIN</span>' : ''}</p><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(u.studentNo)} · 餘額 ${money(u.walletBalance)}</p></div><div class="flex shrink-0 gap-1.5"><button data-action="direct-topup" data-id="${u.id}" ${u.isDisabled ? 'disabled' : ''} class="rounded-lg bg-stamp/10 px-2.5 py-2 text-xs font-bold text-stamp disabled:opacity-35">儲值</button><button data-action="toggle-user" data-id="${u.id}" data-disabled="${u.isDisabled ? 'false' : 'true'}" class="rounded-lg px-2.5 py-2 text-xs font-bold ${u.isDisabled ? 'bg-stamp/10 text-stamp' : 'bg-red-50 text-red-600'}">${u.isDisabled ? '恢復' : '停用'}</button></div></article>`).join('')}</div>`;
+  root.innerHTML = `<div class="space-y-2">${state.admin.users.map(u => `<article class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold ${u.isDisabled ? 'text-slate-400 line-through' : ''}">${escapeHtml(u.seatNo)}號 ${escapeHtml(u.name)} ${u.role === 'Admin' ? '<span class="ml-1 text-[10px] text-ledger">ADMIN</span>' : ''}</p><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(u.studentNo)} · 餘額 ${money(u.walletBalance)}</p></div><div class="flex shrink-0 flex-wrap justify-end gap-1.5"><button data-action="direct-topup" data-id="${u.id}" ${u.isDisabled ? 'disabled' : ''} class="rounded-lg bg-stamp/10 px-2.5 py-2 text-xs font-bold text-stamp disabled:opacity-35">儲值</button><button data-action="toggle-user" data-id="${u.id}" data-disabled="${u.isDisabled ? 'false' : 'true'}" class="rounded-lg px-2.5 py-2 text-xs font-bold ${u.isDisabled ? 'bg-stamp/10 text-stamp' : 'bg-red-50 text-red-600'}">${u.isDisabled ? '恢復' : '停用'}</button>${u.role === 'Admin' ? (u.id !== state.user.id ? `<button data-action="remove-admin" data-id="${u.id}" class="rounded-lg bg-[#FFF6E8] px-2.5 py-2 text-xs font-bold text-[#885A1C]">移除管理</button>` : '') : `<button data-action="set-admin" data-id="${u.id}" class="rounded-lg bg-ledger/10 px-2.5 py-2 text-xs font-bold text-ledger">設為管理</button>`}</div></article>`).join('')}</div>`;
   state.admin.users.filter(user => user.role !== 'Admin' && user.id !== state.user.id).forEach(user => {
     const toggle = root.querySelector(`[data-action="toggle-user"][data-id="${cssEscape(user.id)}"]`);
     toggle?.insertAdjacentHTML('afterend', `<button data-action="delete-user" data-id="${escapeAttr(user.id)}" class="rounded-lg bg-red-700 px-2.5 py-2 text-xs font-bold text-white">刪除</button>`);
@@ -525,10 +524,10 @@ function renderUserList() {
 }
 
 async function renderAdminSystem(root) {
-  root.innerHTML = `<form id="system-form" class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">CLASS SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black">本班設定</h2><div id="system-fields" class="mt-4">${skeletonLines(3)}</div></form>`;
+  root.innerHTML = `<div class="space-y-4"><div class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">CLASS SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black">本班設定</h2><div id="system-fields" class="mt-4">${skeletonLines(3)}</div></div></div>`;
   try {
     const settings = await api('adminGetSettings');
-    $('#system-fields').innerHTML = `<div class="space-y-3"><p class="rounded-xl bg-mist px-3 py-3 text-xs leading-5 text-slate-500"><b>${escapeHtml(settings.className || '本班')}</b> 的設定只會套用到本班，不會影響其他班級。</p><label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">本班校務 Email 後綴（選填）</span><input name="emailDomain" pattern="@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}" class="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-ledger" value="${escapeAttr(settings.emailDomain || '')}" placeholder="例如 @class.edu.tw"/><span class="mt-1 block text-xs leading-5 text-slate-500">這是本班的提示設定；學生仍須輸入完整的一般 Email，系統不會替學生拼接或限制信箱。</span></label><section class="rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">本班驗證信寄送檢查</p><p id="email-diagnostics" class="mt-1 text-xs leading-5 text-slate-500">不寄送測試信，即可檢查 Gmail 授權與今天的剩餘額度。</p><button type="button" data-action="check-email-diagnostics" class="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10 disabled:cursor-not-allowed disabled:opacity-60">檢查 Gmail 授權與寄送額度</button></section><section id="invite-code-section" class="rounded-xl border border-ledger/10 bg-mist p-3"><p class="text-xs font-bold text-ledger">班級邀請碼</p><p class="mt-1 text-xs leading-5 text-slate-500">提供給同班一般使用者註冊；停用後不可再加入。</p><div id="invite-code-list" class="mt-3 space-y-2"><p class="text-xs text-slate-400">載入中…</p></div><button type="button" data-action="create-invite-code" class="mt-3 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10">產生邀請碼</button></section><button class="w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white">儲存本班設定</button></div>`;
+    $('#system-fields').innerHTML = `<div class="space-y-3"><p class="rounded-xl bg-mist px-3 py-3 text-xs leading-5 text-slate-500"><b>${escapeHtml(settings.className || '本班')}</b> 的管理者與學生帳號，請到「帳號」分頁管理；更換管理者時，由現任管理者在「帳號」頁新增或移除其他管理者即可。</p><section id="invite-code-section" class="rounded-xl border border-ledger/10 bg-mist p-3"><p class="text-xs font-bold text-ledger">班級邀請碼</p><p class="mt-1 text-xs leading-5 text-slate-500">提供給同班一般使用者註冊；停用後不可再加入。</p><div id="invite-code-list" class="mt-3 space-y-2"><p class="text-xs text-slate-400">載入中…</p></div><button type="button" data-action="create-invite-code" class="mt-3 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10">產生邀請碼</button></section></div>`;
     await loadAdminInviteCodes();
   } catch (error) { $('#system-fields').innerHTML = errorBlock(error.message); }
 }
@@ -546,26 +545,13 @@ async function createAdminInviteCode() {
   if (label === null) return;
   await busy($('#invite-code-section'), async () => {
     const result = await api('adminCreateInviteCode', { label });
-    closeModal();
-    toast(`邀請碼：${result.code}（請複製保存）`, 'success');
     await loadAdminInviteCodes();
+    openCodeRevealModal({ eyebrow: 'CLASS INVITE', title: '班級邀請碼已產生', code: result.code, note: '<p class="text-sm leading-6 text-slate-600">請把邀請碼發送給同班一般使用者，他們註冊時需要輸入。</p>' });
   });
 }
 
 async function disableAdminInviteCode(id) {
   openConfirmModal({ eyebrow: 'DISABLE INVITE', title: '停用此邀請碼？', body: '<p>停用後，尚未註冊的使用者將不能再使用它加入班級。</p>', submitLabel: '確認停用', onConfirm: async () => { await api('adminDisableInviteCode', { inviteCodeId: id }); closeModal(); await loadAdminInviteCodes(); toast('邀請碼已停用。', 'success'); } });
-}
-
-async function checkEmailDiagnostics() {
-  const target = $('#email-diagnostics');
-  if (target) target.textContent = '檢查中…';
-  const diagnostics = await api('adminGetEmailDiagnostics');
-  if (target) {
-    target.textContent = diagnostics.message;
-    target.className = diagnostics.gmailAuthorized && diagnostics.remainingDailyQuota > 0
-      ? 'mt-1 text-xs leading-5 text-stamp'
-      : 'mt-1 text-xs leading-5 text-red-600';
-  }
 }
 
 async function onClick(event) {
@@ -585,11 +571,13 @@ async function onClick(event) {
       if (subscription) return unsubscribeFromPush();
       return subscribeToPush();
     }
-    if (action === 'install-app') {
-      if (!deferredInstallPrompt) return toast('請使用瀏覽器選單的「安裝應用程式／釘選到桌面」。', 'success');
-      deferredInstallPrompt.prompt();
-      await deferredInstallPrompt.userChoice;
+    if (action === 'install-app') return openInstallGuideModal();
+    if (action === 'install-app-confirm') {
+      const promptEvent = deferredInstallPrompt;
       deferredInstallPrompt = null;
+      closeModal();
+      if (promptEvent) { promptEvent.prompt(); await promptEvent.userChoice.catch(() => {}); }
+      else toast('請依照上方步驟，用瀏覽器選單釘選到桌面。', 'success');
       renderInstallButton();
       return;
     }
@@ -598,7 +586,6 @@ async function onClick(event) {
     if (action === 'verify-type') { state.verification.type = button.dataset.type; renderVerification(); return; }
     if (action === 'refresh-verification') return generateVerification();
     if (action === 'refresh-wallet') return renderWallet();
-    if (action === 'open-upgrade') return openUpgradeModal();
     if (action === 'logout') return logout();
     if (action === 'developer-logout') return developerLogout();
     if (action === 'developer-tab') { state.developerTab = button.dataset.tab || 'overview'; renderDeveloperView(); return; }
@@ -612,11 +599,17 @@ async function onClick(event) {
     if (action === 'open-scanner') return openScanner(button.dataset.mode);
     if (action === 'close-scanner') return closeScanner();
     if (action === 'submit-manual-qr') return processManualQr();
+    if (action === 'submit-pin') return processManualPin();
+    if (action === 'copy-reveal-code') return copyRevealCode(button.dataset.code);
+    if (action === 'share-reveal-code') return shareRevealCode(button.dataset.title, button.dataset.code);
+    if (action === 'reveal-done') return closeModal();
+    if (action === 'set-admin') return confirmAdminRoleChange(button.dataset.id, 'Admin');
+    if (action === 'remove-admin') return confirmAdminRoleChange(button.dataset.id, 'Student');
+    if (action === 'developer-check-email') return developerCheckEmail();
     if (action === 'confirm-scan-action') return openScanConfirmation();
     if (action === 'close-modal') return closeModal();
     if (action === 'copy-order-text') return copyOrderText();
     if (action === 'export-csv') return exportCsv();
-    if (action === 'check-email-diagnostics') return checkEmailDiagnostics();
     if (action === 'create-invite-code') return createAdminInviteCode();
     if (action === 'disable-invite-code') return disableAdminInviteCode(button.dataset.id);
     if (action === 'refresh-users') return renderAdminUsers($('#admin-content'));
@@ -632,7 +625,7 @@ async function onClick(event) {
     if (action === 'delete-own-order') return confirmOwnOrderDelete(button.dataset.orderId);
     if (action === 'delete-user') return confirmUserDelete(button.dataset.id);
   };
-  const lockable = ['refresh-verification', 'refresh-wallet', 'logout', 'developer-logout', 'developer-refresh', 'copy-order-text', 'export-csv', 'check-email-diagnostics', 'refresh-users'];
+  const lockable = ['refresh-verification', 'refresh-wallet', 'logout', 'developer-logout', 'developer-refresh', 'copy-order-text', 'export-csv', 'refresh-users', 'developer-check-email'];
   return lockable.includes(action) ? busy(button, run) : run();
 }
 
@@ -652,7 +645,6 @@ async function onSubmit(event) {
   if (form.id === 'menu-item-form') return submitAdminSave('adminSaveMenuItem', form, '已新增餐點。', () => renderAdminCatalog($('#admin-content')));
   if (form.id === 'item-option-form') return submitAdminSave('adminSaveItemOption', form, '已新增客製選項。', () => renderAdminCatalog($('#admin-content')));
   if (form.id === 'session-form') return submitAdminSave('adminSaveSession', form, result => result.notification ? `已建立訂餐場次，通知寄送：${result.notification.sent}/${result.notification.attempted} 位使用者。` : '已建立訂餐場次。', () => { state.admin.catalog = null; renderAdminSessions($('#admin-content')); });
-  if (form.id === 'system-form') return submitAdminSave('adminSaveSettings', form, '本班設定已儲存。', () => renderAdminSystem($('#admin-content')));
   if (form.id === 'developer-settings-form') return submitAdminSave('developerSaveSettings', form, '開發者系統設定已儲存。', () => { state.developerSettings = null; return refreshDeveloperData(); });
 }
 
@@ -794,10 +786,6 @@ async function refreshOrders() {
   renderShell();
 }
 
-function openUpgradeModal() {
-  openConfirmModal({ eyebrow: 'ADMIN ACCESS', title: '輸入系統授權碼', body: '<p>升級後可建立場次、掃碼核銷、儲值並匯出訂餐資料。</p><input id="authorization-code" type="password" class="mt-4 w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-ledger" placeholder="系統授權碼" />', submitLabel: '升級為管理員', onConfirm: async () => { const code = $('#authorization-code').value; const result = await api('upgradeAdmin', { authorizationCode: code }); saveSession(result); closeModal(); state.view = 'admin'; renderShell(); toast('管理員權限已啟用。', 'success'); } });
-}
-
 async function logout() {
   try { if (state.token && apiConfigured()) await api('logout', {}, state.token, false); } catch (_) { /* 本機登出仍應完成。 */ }
   clearSession(); clearVerificationTimer(); state.authMode = 'login'; renderAuth(); toast('已安全登出。', 'success');
@@ -837,8 +825,7 @@ async function processScannedQr(raw) {
     const payload = parseVerificationPayload(raw);
     const result = await api('adminResolveVerification', { mode: state.scannerMode, payload });
     await closeScanner();
-    state.admin = reduceScanState(state.admin, { ok: true, result });
-    renderAdmin();
+    applyScanResult(result);
     toast('驗證成功，請核對後再確認。', 'success');
   } catch (error) {
     state.admin = reduceScanState(state.admin, { ok: false, errorMessage: error.message });
@@ -849,6 +836,23 @@ async function processScannedQr(raw) {
     state.scannerProcessing = false;
     setOperationLock(false);
   }
+}
+
+function applyScanResult(result) {
+  state.admin = reduceScanState(state.admin, { ok: true, result });
+  renderAdmin();
+}
+
+// 相機無法使用時，直接輸入學生畫面顯示的 6 位 PIN 驗證
+async function processManualPin() {
+  const pin = String($('#manual-pin')?.value || '').trim();
+  if (!/^\d{6}$/.test(pin)) return toast('請輸入 6 位數 PIN 碼。', 'error');
+  await busy($('#manual-pin'), async () => {
+    const result = await api('adminResolvePin', { mode: state.scannerMode, pin });
+    await closeScanner();
+    applyScanResult(result);
+    toast('驗證成功，請核對後再確認。', 'success');
+  });
 }
 
 function openScanConfirmation() {
@@ -866,8 +870,7 @@ function createDeveloperClassAdminCode() {
     if (!className) throw new Error('請輸入班級名稱。');
     const result = await developerApi('developerIssueClassAdminCode', { className });
     await refreshDeveloperData();
-    closeModal();
-    openConfirmModal({ eyebrow: 'ONE-TIME CLASS ACCESS', title: '班級管理者代碼已核發', body: `<p class="text-sm leading-6 text-slate-600">請立即複製並私下交給該班第一位管理者。原始代碼不會再次顯示，資料表只保存雜湊。</p><div class="mt-4 rounded-xl bg-mist px-4 py-4 text-center"><code class="break-all text-lg font-black tracking-[.12em] text-ledger">${escapeHtml(result.code)}</code></div><p class="mt-3 text-xs leading-5 text-red-600">請勿把代碼貼到公開群組，也不要把開發者金鑰交給班級管理者。</p>`, submitLabel: '我已保存代碼', onConfirm: async () => { closeModal(); } });
+    openCodeRevealModal({ eyebrow: 'ONE-TIME CLASS ACCESS', title: '班級管理者代碼已核發', code: result.code, note: '<p class="text-sm leading-6 text-slate-600">請立即複製並私下交給該班第一位管理者。原始代碼不會再次顯示，資料表只保存雜湊。</p><p class="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700">請勿把代碼貼到公開群組。</p>' });
   } });
 }
 
@@ -1101,11 +1104,80 @@ async function updateNotificationUI() {
 function renderInstallButton() {
   const button = $('#install-app-button');
   if (!button) return;
-  const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-  if (deferredInstallPrompt || standalone) {
-    button.classList.remove('hidden');
-    button.classList.add('flex');
+  button.classList.remove('hidden');
+  button.classList.add('flex');
+}
+
+// ----代碼顯示視窗（必須確認已複製才能關閉）----
+function openCodeRevealModal({ eyebrow, title, code, note = '' }) {
+  closeModal();
+  const root = $('#modal-root');
+  root.innerHTML = `<div class="fixed inset-0 z-50 flex items-end bg-ledger/60 p-3 sm:items-center sm:justify-center"><section class="modal-enter w-full max-w-md rounded-[1.5rem] bg-white p-5 shadow-lift"><p class="text-[11px] font-bold tracking-[.13em] text-slate-500">${escapeHtml(eyebrow || 'ONE-TIME CODE')}</p><h2 class="mt-1 font-serif text-xl font-black">${escapeHtml(title)}</h2><div class="mt-3 text-sm leading-6 text-slate-600">${note}</div><div class="mt-4 rounded-xl bg-mist px-4 py-5 text-center"><code id="reveal-code" class="break-all text-2xl font-black tracking-[.16em] text-ledger">${escapeHtml(code)}</code></div><div class="mt-4 grid grid-cols-2 gap-2"><button data-action="copy-reveal-code" data-code="${escapeAttr(code)}" class="rounded-xl bg-mist px-4 py-3 text-sm font-bold text-ledger">複製代碼</button><button data-action="share-reveal-code" data-code="${escapeAttr(code)}" data-title="${escapeAttr(title)}" class="rounded-xl bg-stamp px-4 py-3 text-sm font-bold text-white">分享</button></div><button data-action="reveal-done" class="mt-2 w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white">我已複製代碼</button><p class="mt-3 text-center text-xs text-slate-400">請先複製或分享，再關閉此視窗。</p></section></div>`;
+}
+
+async function copyRevealCode(code) {
+  try { await navigator.clipboard.writeText(code); toast('代碼已複製。', 'success'); }
+  catch (_) {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = code; textarea.style.position = 'fixed'; textarea.style.opacity = '0';
+      document.body.appendChild(textarea); textarea.select(); document.execCommand('copy'); textarea.remove();
+      toast('代碼已複製。', 'success');
+    } catch (__) { toast('無法自動複製，請長按選取代碼後手動複製。', 'error'); }
   }
+}
+
+async function shareRevealCode(title, code) {
+  const text = `${title}：${code}（訂餐通）`;
+  if (navigator.share) {
+    try { await navigator.share({ title: '訂餐通', text }); return; } catch (_) { /* 使用者取消或失敗，改為複製。 */ }
+  }
+  await copyRevealCode(code);
+  toast('已複製，可貼到 LINE／Messenger 等平台。', 'success');
+}
+
+// ----釘選到桌面引導（不會自動消失）----
+function openInstallGuideModal() {
+  closeModal();
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const steps = isIOS
+    ? ['在 Safari 開啟本網站', '點下方「分享」按鈕（⬆️ 圖示）', '選擇「加入主畫面」', '從主畫面開啟後，即可接收通知']
+    : isAndroid
+      ? ['在 Chrome 開啟本網站', '點右上角「⋮」選單', '選擇「加到主畫面」或「安裝應用程式」', '從主畫面開啟後，即可接收通知']
+      : ['在網址列右側找「安裝」圖示（⊕ 或下載圖示）', '點「安裝」', '安裝後即可像 App 一樣使用並接收通知'];
+  const root = $('#modal-root');
+  root.innerHTML = `<div class="fixed inset-0 z-50 flex items-end bg-ledger/60 p-3 sm:items-center sm:justify-center"><section class="modal-enter w-full max-w-md rounded-[1.5rem] bg-white p-5 shadow-lift"><p class="text-[11px] font-bold tracking-[.13em] text-slate-500">INSTALL GUIDE</p><h2 class="mt-1 font-serif text-xl font-black">把訂餐通釘選到桌面</h2><p class="mt-2 text-sm leading-6 text-slate-500">釘選後就像手機 App 一樣使用；手機通知也需在釘選後開啟。${isIOS ? '<b class="text-red-600">iPhone 需 iOS 16.4 以上。</b>' : ''}</p><ol class="mt-4 space-y-2">${steps.map((step, index) => `<li class="flex items-center gap-3 rounded-xl bg-mist px-3 py-3 text-sm"><b class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-ledger text-xs text-white">${index + 1}</b><span>${step}</span></li>`).join('')}</ol>${deferredInstallPrompt ? '<button data-action="install-app-confirm" class="mt-4 w-full rounded-xl bg-ledger px-4 py-3.5 text-sm font-bold text-white">立即安裝</button>' : ''}<button data-action="close-modal" class="mt-2 w-full rounded-xl bg-mist px-4 py-3.5 text-sm font-bold text-ledger">我了解了，稍後再裝</button></section></div>`;
+}
+
+// ----管理員角色管理（指定／移除管理者）----
+function confirmAdminRoleChange(userId, role) {
+  const user = state.admin.users.find(item => item.id === userId); if (!user) return;
+  const isPromote = role === 'Admin';
+  openConfirmModal({
+    eyebrow: isPromote ? 'PROMOTE ADMIN' : 'DEMOTE ADMIN',
+    title: `${isPromote ? '將' : '移除'} ${user.name} 的管理者權限？`,
+    body: isPromote
+      ? '<p>對方將可建立場次、掃碼核銷、儲值、管理菜單與班級設定。</p>'
+      : '<p>移除後對方回到一般學生權限，無法再使用管理工作台。</p><p class="mt-2 rounded-xl bg-mist px-3 py-2 text-xs leading-5 text-slate-500">系統會保留至少一位管理者，也不能移除自己的管理權限。</p>',
+    submitLabel: isPromote ? '確認設為管理者' : '確認移除管理者',
+    onConfirm: async () => {
+      const result = await api('adminSetRole', { userId, role });
+      closeModal();
+      toast(result.message || '角色已更新。', 'success');
+      await renderAdminUsers($('#admin-content'));
+    },
+  });
+}
+
+// ----開發者郵件服務檢查----
+async function developerCheckEmail() {
+  const target = $('#developer-email-diagnostics');
+  if (target) target.textContent = '檢查中…';
+  try {
+    const diagnostics = await developerApi('developerGetEmailDiagnostics');
+    if (target) { target.textContent = diagnostics.message; target.className = `mt-1 text-xs leading-5 ${diagnostics.gmailAuthorized ? 'text-stamp' : 'text-red-600'}`; }
+  } catch (error) { if (target) { target.textContent = error.message; target.className = 'mt-1 text-xs leading-5 text-red-600'; } }
 }
 
 async function api(action, data = {}, token = state.token, throwWhenUnconfigured = true) {

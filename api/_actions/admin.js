@@ -1,6 +1,6 @@
 // 動作：管理員（儀表板、菜單、帳號、設定、邀請碼）
 import { appError, sid, num, round2, sha256Hex, todayString } from '../_lib/util.js';
-import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, getAppSetting, setAppSetting } from '../_lib/db.js';
+import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting } from '../_lib/db.js';
 import { bumpAuthVersion, createInviteCodeValue } from '../_lib/auth.js';
 import { outstandingOf, dashboardOrderRow } from '../_lib/serialize.js';
 import { mailConfigured } from '../_lib/mail.js';
@@ -213,18 +213,10 @@ export const actions = {
 
   async adminGetSettings(_data, ctx) {
     const classRow = await findOne('classes', { class_id: ctx.classId });
-    return {
-      className: classRow ? classRow.name : '本班',
-      emailDomain: await getAppSetting(ctx.classId, 'email_domain', ''),
-    };
+    return { className: classRow ? classRow.name : '本班' };
   },
 
-  async adminSaveSettings(data, ctx) {
-    const emailDomain = String(data.emailDomain || '').trim();
-    if (emailDomain && !/^@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(emailDomain)) {
-      throw appError('INVALID_INPUT', 'Email 後綴格式不正確（例如 @class.edu.tw）。');
-    }
-    await setAppSetting(ctx.classId, 'email_domain', emailDomain);
+  async adminSaveSettings() {
     return { ok: true };
   },
 
@@ -247,15 +239,22 @@ export const actions = {
     return { ok: true };
   },
 
-  async adminGetEmailDiagnostics() {
-    const configured = mailConfigured();
-    return {
-      message: configured
-        ? `郵件服務正常（Gmail SMTP：${process.env.SMTP_USER}，僅用於驗證信與重設信）。`
-        : '郵件服務尚未設定（請設定 SMTP_USER / SMTP_PASS，並在 Gmail 產生應用程式密碼）。',
-      gmailAuthorized: configured,
-      remainingDailyQuota: configured ? 500 : 0,
-    };
+  // 班級管理者可直接指定或移除管理者（至少保留一位，不能變更自己）
+  async adminSetRole(data, ctx) {
+    const userId = Number(data.userId);
+    const role = String(data.role || '');
+    if (!['Admin', 'Student'].includes(role)) throw appError('INVALID_INPUT', '角色不正確。');
+    if (userId === ctx.user.id) throw appError('PROTECTED', '不能變更自己的管理者角色。');
+    const user = await findOne('users', { id: userId }, ctx.classId);
+    if (!user) throw appError('NOT_FOUND', '找不到使用者。');
+    if (user.role === role) throw appError('INVALID_INPUT', '該帳號已是此角色。');
+    if (role === 'Student') {
+      const adminCount = await countRows('users', { class_id: ctx.classId, role: 'Admin' });
+      if (adminCount <= 1) throw appError('PROTECTED', '班級至少需要一位管理者，無法移除最後一位。');
+    }
+    await updateRows('users', { id: user.id }, { role });
+    await bumpAuthVersion(user.id);
+    return { ok: true, message: role === 'Admin' ? `${user.student_name} 已成為管理者。` : `${user.student_name} 已改為一般學生。` };
   },
 };
 

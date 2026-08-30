@@ -130,12 +130,14 @@ create table if not exists public.verification_records (
   session_id bigint references public.sessions(id) on delete set null,
   user_id    bigint references public.users(id) on delete set null,
   payload    text not null,
+  pin_hash   text not null default '',
   status     text not null default 'Pending',
   expires_at timestamptz not null,
   resolved_at timestamptz,
   created_at timestamptz not null default now()
 );
 create index if not exists idx_verification_user on public.verification_records (user_id, status, expires_at);
+create index if not exists idx_verification_pin on public.verification_records (pin_hash) where status = 'Pending';
 
 -- 登入／驗證／重設 Token -----------------------------------------------------
 create table if not exists public.auth_tokens (
