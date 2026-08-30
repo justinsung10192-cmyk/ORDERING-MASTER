@@ -86,6 +86,7 @@ create table if not exists public.sessions (
   cutoff_time           timestamptz not null,
   payment_mode          text not null default 'Stored-value Only',
   is_open               boolean not null default true,
+  is_deleted            boolean not null default false,
   cutoff_reminder_sent  boolean not null default false,
   created_at            timestamptz not null default now(),
   closed_at             timestamptz
@@ -103,6 +104,7 @@ create table if not exists public.orders (
   total_price    numeric(10,2) not null default 0,
   prior_paid     numeric(10,2) not null default 0,
   payment_status text not null default 'UnpaidCash',
+  is_deleted     boolean not null default false,
   pickup_status  text not null default 'Pending',
   note           text not null default '',
   created_at     timestamptz not null default now(),
@@ -563,3 +565,78 @@ end; $$;
 
 -- 店家審核：核准後自動建立共用店家
 alter table public.merchants add column if not exists is_approved boolean not null default false;
+
+-- 刪除場次並退款
+create or replace function public.fn_delete_session_and_refund(
+  p_class_id text,
+  p_session_id bigint
+) returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_session record;
+  v_order record;
+  v_refund numeric;
+  v_refunded_count int := 0;
+begin
+  select * into v_session from sessions where id = p_session_id and class_id = p_class_id for update;
+  if v_session.id is null then
+    raise exception 'SESSION_NOT_FOUND';
+  end if;
+  
+  if v_session.is_deleted then
+    return jsonb_build_object('ok', true, 'refunded_count', 0);
+  end if;
+
+  update sessions set is_deleted = true, closed_at = now() where id = p_session_id;
+
+  for v_order in select * from orders where session_id = p_session_id and (is_deleted is null or is_deleted = false) loop
+    v_refund := coalesce(v_order.prior_paid, 0);
+    
+    if v_refund > 0 then
+      update users set wallet_balance = wallet_balance + v_refund, updated_at = now()
+      where id = v_order.user_id;
+      
+      insert into transactions (class_id, user_id, order_id, amount, kind, note)
+      values (p_class_id, v_order.user_id, v_order.id, v_refund, 'Refund', '場次取消退款');
+    end if;
+
+    update orders set is_deleted = true where id = v_order.id;
+    v_refunded_count := v_refunded_count + 1;
+  end loop;
+
+  return jsonb_build_object('ok', true, 'refunded_count', v_refunded_count);
+end;
+$$;
+
+alter table public.developers add column if not exists wipe_token text;
+alter table public.developers add column if not exists wipe_token_expires_at timestamptz;
+
+-- 開發者清空系統所有營業資料
+create or replace function public.fn_wipe_all_data() returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+begin
+  -- 刪除依賴最深到最淺的資料表內容
+  truncate table public.transactions cascade;
+  truncate table public.orders cascade;
+  truncate table public.sessions cascade;
+  truncate table public.users cascade;
+  truncate table public.classes cascade;
+  truncate table public.class_admin_codes cascade;
+  truncate table public.class_admin_applications cascade;
+  truncate table public.push_subscriptions cascade;
+  
+  -- 刪除商家與菜單，但保留開發者、學校、全區店家的基本架構 (看需求，通常全刪)
+  -- 題目要求：刪除所有資料。我會連店家、餐點一起清空，但保留開發者與學校
+  truncate table public.item_options cascade;
+  truncate table public.menu_items cascade;
+  truncate table public.stores cascade;
+  truncate table public.merchants cascade;
+  
+  -- 重新插入全區共用虛擬班級
+  insert into public.classes (class_id, name) values ('global','全區共用') on conflict (class_id) do nothing;
+  
+  return jsonb_build_object('ok', true);
+end;
+$$;

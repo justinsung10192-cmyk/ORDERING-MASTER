@@ -13,7 +13,7 @@ export const actions = {
       limit: 200,
     });
     const orders = await listRows('orders', { classId: ctx.classId, filters: { user_id: ctx.user.id } });
-    const cashUnpaid = round2(orders.reduce((sum, order) => sum + outstandingOf(order), 0));
+    const cashUnpaid = round2(orders.filter(o => !o.is_deleted).reduce((sum, order) => sum + outstandingOf(order), 0));
     const freshUser = await findOne('users', { id: ctx.user.id });
 
     const recentOrders = await listRows('orders', { classId: ctx.classId, filters: { user_id: ctx.user.id }, order: 'created_at', orderAscending: false, limit: 20 });
@@ -42,6 +42,7 @@ export const actions = {
           totalPrice: num(order.total_price),
           paymentStatus: order.payment_status,
           pickupStatus: order.pickup_status,
+          isDeleted: order.is_deleted,
         };
       }),
     };

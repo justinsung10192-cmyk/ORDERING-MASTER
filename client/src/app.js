@@ -69,7 +69,30 @@ async function bootstrap() {
     renderMerchantShell();
     return;
   }
-  const resetToken = new URLSearchParams(location.search).get('resetToken');
+  const params = new URLSearchParams(location.search);
+  const resetToken = params.get('resetToken');
+  const wipeToken = params.get('action') === 'wipe_data' ? params.get('token') : null;
+
+  if (wipeToken) {
+    if (!state.developerToken) {
+      alert('請先以開發者身分登入後，再次點擊信件中的刪除連結。');
+      state.authMode = 'developerLogin';
+      renderAuth();
+      return;
+    }
+    await busy(document.body, async () => {
+      try {
+        await developerApi('developerExecuteWipeData', { token: wipeToken });
+        alert('系統資料已全數清空。');
+        location.href = location.pathname;
+      } catch (err) {
+        alert(err.message || '刪除失敗或驗證碼已過期。');
+        location.href = location.pathname;
+      }
+    });
+    return;
+  }
+
   if (resetToken) {
     state.token = '';
     state.user = null;
@@ -158,7 +181,7 @@ function renderDeveloperView() {
 
 function renderDeveloperSettings(root) {
   const maintenance = Boolean(state.developerSettings?.maintenance);
-  root.innerHTML = `<div class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SYSTEM OWNER SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">開發者系統設定</h2><p class="mt-2 text-sm leading-6 text-slate-500">跨班級的系統與安全設定。各班管理者由各班在「帳號」頁自行維護。</p><section class="mt-4 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">全服廣播通知</p><p class="mt-1 text-xs leading-5 text-slate-500">傳送自訂訊息給所有班級已開啟通知的裝置。</p><textarea id="developer-broadcast-message" maxlength="200" rows="2" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-ledger" placeholder="例如：明天校外教學，暫停訂餐一天。"></textarea><button type="button" data-action="developer-broadcast" class="mt-2 w-full rounded-lg bg-ledger px-3 py-2.5 text-xs font-bold text-white">傳送全服廣播</button></section><section class="mt-3 rounded-xl border border-red-100 bg-red-50/60 p-3"><p class="text-xs font-bold text-red-700">維修模式</p><p class="mt-1 text-xs leading-5 text-slate-500">開啟後，一般使用者與管理員無法登入（登入頁顯示維修中）；開發者可正常登入以關閉。</p><button type="button" data-action="developer-maintenance" data-enabled="${maintenance ? 'false' : 'true'}" class="mt-2 w-full rounded-lg px-3 py-2.5 text-xs font-bold text-white ${maintenance ? 'bg-ledger' : 'bg-red-700'}">${maintenance ? '目前維修中 · 點我恢復' : '開啟維修模式'}</button></section><section class="mt-3 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">郵件服務檢查（驗證信／重設信）</p><p id="developer-email-diagnostics" class="mt-1 text-xs leading-5 text-slate-500">檢查 Gmail SMTP 授權與寄送狀態。</p><button type="button" data-action="developer-check-email" class="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10">檢查郵件服務</button></section><section class="mt-3 rounded-xl border border-ledger/10 bg-mist/40 p-3"><p class="text-xs font-bold text-ledger">開發者帳號</p><p class="mt-1 text-xs leading-5 text-slate-500">管理開發者帳號；不能刪除自己，且系統至少保留一位開發者。</p><div id="developer-accounts" class="mt-2 space-y-2">${skeletonLines(1)}</div></section></div>`;
+  root.innerHTML = `<div class="rounded-[1.5rem] bg-white p-5 shadow-paper"><p class="text-[11px] font-bold tracking-[.13em] text-stamp">SYSTEM OWNER SETTINGS</p><h2 class="mt-1 font-serif text-xl font-black text-ledger">開發者系統設定</h2><p class="mt-2 text-sm leading-6 text-slate-500">跨班級的系統與安全設定。各班管理者由各班在「帳號」頁自行維護。</p><section class="mt-4 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">全服廣播通知</p><p class="mt-1 text-xs leading-5 text-slate-500">傳送自訂訊息給所有班級已開啟通知的裝置。</p><textarea id="developer-broadcast-message" maxlength="200" rows="2" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-ledger" placeholder="例如：明天校外教學，暫停訂餐一天。"></textarea><button type="button" data-action="developer-broadcast" class="mt-2 w-full rounded-lg bg-ledger px-3 py-2.5 text-xs font-bold text-white">傳送全服廣播</button></section><section class="mt-3 rounded-xl border border-red-100 bg-red-50/60 p-3"><p class="text-xs font-bold text-red-700">維修模式</p><p class="mt-1 text-xs leading-5 text-slate-500">開啟後，一般使用者與管理員無法登入（登入頁顯示維修中）；開發者可正常登入以關閉。</p><button type="button" data-action="developer-maintenance" data-enabled="${maintenance ? 'false' : 'true'}" class="mt-2 w-full rounded-lg px-3 py-2.5 text-xs font-bold text-white ${maintenance ? 'bg-ledger' : 'bg-red-700'}">${maintenance ? '目前維修中 · 點我恢復' : '開啟維修模式'}</button></section><section class="mt-3 rounded-xl border border-red-100 bg-red-50 p-3"><p class="text-xs font-bold text-red-700">危險區域：清空系統</p><p class="mt-1 text-xs leading-5 text-slate-500">刪除所有班級、使用者、訂單與交易（保留學校、全區菜單與開發者帳號）。需三重確認與信箱驗證。</p><button type="button" data-action="developer-wipe-data" class="mt-2 w-full rounded-lg bg-red-700 px-3 py-2.5 text-xs font-bold text-white">刪除所有資料</button></section><section class="mt-3 rounded-xl border border-apricot/20 bg-[#FFF8EC] p-3"><p class="text-xs font-bold text-[#805820]">郵件服務檢查（驗證信／重設信）</p><p id="developer-email-diagnostics" class="mt-1 text-xs leading-5 text-slate-500">檢查 Gmail SMTP 授權與寄送狀態。</p><button type="button" data-action="developer-check-email" class="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-xs font-bold text-ledger ring-1 ring-ledger/10">檢查郵件服務</button></section><section class="mt-3 rounded-xl border border-ledger/10 bg-mist/40 p-3"><p class="text-xs font-bold text-ledger">開發者帳號</p><p class="mt-1 text-xs leading-5 text-slate-500">管理開發者帳號；不能刪除自己，且系統至少保留一位開發者。</p><div id="developer-accounts" class="mt-2 space-y-2">${skeletonLines(1)}</div></section></div>`;
   loadDeveloperAccounts().catch(() => {});
 }
 
@@ -530,7 +553,7 @@ async function renderWallet() {
     $('#wallet-balance').textContent = money(state.user.walletBalance);
     $('#wallet-unpaid').innerHTML = state.wallet.cashUnpaid > 0 ? `目前另有 <b class="tabular-nums">${money(state.wallet.cashUnpaid)}</b> 現金未繳，請出示「結帳 QR」供管理員核對。` : '目前沒有現金未繳款項。';
     $('#transaction-list').innerHTML = state.wallet.transactions.length ? state.wallet.transactions.map(t => `<div class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold">${t.type === 'TopUp' ? '儲值入帳' : t.type === 'Manual' ? '手動調整' : '訂餐扣款'}</p><p class="mt-0.5 text-[11px] text-slate-500">${formatDateTime(t.timestamp)}</p></div><b class="text-sm tabular-nums ${t.amount >= 0 ? 'text-stamp' : 'text-apricot'}">${signedMoney(t.amount)}</b></div>`).join('') : emptyState('還沒有交易紀錄', '儲值或以餘額完成訂餐後，紀錄會出現在這裡。');
-    $('#wallet-orders').innerHTML = (state.wallet.orders || []).length ? state.wallet.orders.map(order => `<div class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5"><div><p class="text-sm font-bold">${escapeHtml(order.itemName || '訂單')}</p><p class="mt-0.5 text-[11px] text-slate-500">${escapeHtml(order.orderDate || '')} · ${escapeHtml(order.storeName || '')}${order.paymentStatus === 'PaidWallet' ? '' : ' · 未結清'}</p></div><b class="text-sm tabular-nums text-ledger">${money(order.totalPrice)}</b></div>`).join('') : '';
+    $('#wallet-orders').innerHTML = (state.wallet.orders || []).length ? state.wallet.orders.map(order => `<div class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-ledger/5 ${order.isDeleted ? 'opacity-50' : ''}"><div><p class="text-sm font-bold ${order.isDeleted ? 'line-through text-slate-400' : ''}">${escapeHtml(order.itemName || '訂單')}</p><p class="mt-0.5 text-[11px] text-slate-500">${escapeHtml(order.orderDate || '')} · ${escapeHtml(order.storeName || '')}${order.isDeleted ? ' · <span class="text-red-500">場次已取消</span>' : (order.paymentStatus === 'PaidWallet' ? '' : ' · 未結清')}</p></div><b class="text-sm tabular-nums text-ledger ${order.isDeleted ? 'line-through text-slate-400' : ''}">${money(order.totalPrice)}</b></div>`).join('') : '';
   } catch (error) {
     $('#wallet-unpaid').textContent = '暫時無法讀取錢包資料。';
     $('#transaction-list').innerHTML = errorBlock(error.message);
@@ -764,6 +787,7 @@ async function onClick(event) {
     if (action === 'developer-check-email') return developerCheckEmail();
     if (action === 'developer-broadcast') return developerBroadcast();
     if (action === 'developer-maintenance') return developerSetMaintenance(button.dataset.enabled === 'true', button);
+    if (action === 'developer-wipe-data') return confirmDeveloperWipeData();
     if (action === 'developer-resend-verify') return developerResendVerificationCode();
     if (action === 'developer-delete-developer') return confirmDeveloperDelete(button.dataset.id);
     if (action === 'developer-refresh-menu') return renderDeveloperMenu($('#developer-content'));
@@ -1084,6 +1108,7 @@ async function refreshOrders(silent = false) {
 function startAutoRefresh() {
   window.addEventListener('focus', autoRefreshTick);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefreshTick(); });
+  setInterval(autoRefreshTick, 15000); // 恢復 15 秒輕量輪詢，保持畫面即時同步
 }
 
 function stopLunchCountdown() {
@@ -1562,6 +1587,42 @@ async function loadDeveloperAccounts() {
   }
 }
 
+
+function confirmDeveloperWipeData() {
+  openConfirmModal({
+    eyebrow: 'WIPE DATA (1/3)',
+    title: '警告：你即將刪除所有營運資料',
+    body: '<p class="text-sm">這會刪除系統內所有的班級、使用者、訂單與交易紀錄。這是無法復原的毀滅性操作。</p>',
+    submitLabel: '我了解，繼續 (1/3)',
+    onConfirm: async () => {
+      closeModal();
+      setTimeout(() => {
+        openConfirmModal({
+          eyebrow: 'WIPE DATA (2/3)',
+          title: '再次確認：資料將永久遺失',
+          body: '<p class="text-sm">請再次確認，除了學校與店家外，所有的學生個資與歷史訂單都會被直接清空。</p>',
+          submitLabel: '確認，下一步 (2/3)',
+          onConfirm: async () => {
+            closeModal();
+            setTimeout(() => {
+              openConfirmModal({
+                eyebrow: 'WIPE DATA (3/3)',
+                title: '最終確認：發送刪除信',
+                body: '<p class="text-sm">為了安全，我們將發送一封附帶執行連結的信件到你的開發者信箱，你必須點擊該連結才能真正刪除資料。</p>',
+                submitLabel: '發送刪除確認信',
+                onConfirm: async () => {
+                  const result = await developerApi('developerRequestWipeData', {});
+                  closeModal();
+                  toast(result.message || '已發送確認信，請查收。', 'success');
+                }
+              });
+            }, 300);
+          }
+        });
+      }, 300);
+    }
+  });
+}
 function confirmDeveloperDelete(developerId) {
   const target = developerAccountsCache.find(item => String(item.id) === String(developerId));
   openConfirmModal({

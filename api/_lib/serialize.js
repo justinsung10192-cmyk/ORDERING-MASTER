@@ -132,6 +132,7 @@ export function publicSession(session, storeName, menuItems, existingOrder) {
     orderDate: session.order_date,
     cutoffTime: session.cutoff_time,
     paymentMode: session.payment_mode,
+    isOpen: session.is_open,
     menuItems,
     existingOrder: existingOrder ? publicOrder(existingOrder) : null,
   };
@@ -139,7 +140,7 @@ export function publicSession(session, storeName, menuItems, existingOrder) {
 
 export async function loadOpenSessions(user) {
   const classId = user.class_id;
-  const { data: sessions, error } = await supabase
+  const { data: rawSessions, error } = await supabase
     .from('sessions')
     .select('*')
     .eq('class_id', classId)
@@ -147,6 +148,7 @@ export async function loadOpenSessions(user) {
     .order('order_date', { ascending: true })
     .order('cutoff_time', { ascending: true });
   if (error) throw new Error('讀取場次失敗。');
+  const sessions = (rawSessions || []).filter(s => !s.is_deleted);
 
   const orders = sessions.length
     ? await listRowsIn('orders', 'session_id', sessions.map(session => session.id), { classId })

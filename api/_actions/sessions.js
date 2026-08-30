@@ -1,6 +1,6 @@
 // 動作：場次管理（建立、改截止、提前結束、刪除）＋推播通知
 import { appError, sid, num } from '../_lib/util.js';
-import { findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, findStoreForClass } from '../_lib/db.js';
+import { findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, findStoreForClass, callRpc } from '../_lib/db.js';
 import { sendPushToClass, sendPushToUser } from '../_lib/push.js';
 
 function formatTime(iso) {
@@ -64,9 +64,12 @@ export const actions = {
   async adminDeleteSession(data, ctx) {
     const session = await findOne('sessions', { id: Number(data.sessionId) }, ctx.classId);
     if (!session) throw appError('NOT_FOUND', '場次不存在。');
-    const orders = await listRowsIn('orders', 'session_id', [session.id], { classId: ctx.classId });
-    if (orders.length) throw appError('PROTECTED', '此場次已有訂單，基於帳務保護無法刪除。');
-    await deleteRows('sessions', { id: session.id });
-    return { ok: true };
+    
+    const result = await callRpc('fn_delete_session_and_refund', {
+      p_class_id: ctx.classId,
+      p_session_id: session.id,
+    });
+    
+    return { ok: true, refundedCount: result.refunded_count };
   },
 };

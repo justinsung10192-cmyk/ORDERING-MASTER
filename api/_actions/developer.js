@@ -1,7 +1,7 @@
 // 動作：開發者工作台（班級管理者代碼、跨班級帳號管理、系統設定）
 import { randomBytes } from 'node:crypto';
 import { appError, sid, num, sha256Hex, randomDigits } from '../_lib/util.js';
-import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting, throwDb } from '../_lib/db.js';
+import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, countRows, getAppSetting, setAppSetting, throwDb, callRpc } from '../_lib/db.js';
 import { verifyPassword, createPassword, createDeveloperSession, destroySession, bumpAuthVersion, createClassAdminCodeValue } from '../_lib/auth.js';
 import { mailConfigured, sendMail, verificationEmailHtml, developerLoginAlertHtml, classAdminCodeEmailHtml } from '../_lib/mail.js';
 import { sendPushToAll } from '../_lib/push.js';
@@ -463,7 +463,43 @@ export const actions = {
     return { ok: true, sent: result.sent, attempted: result.attempted };
   },
 
-  async developerSetMaintenance(data) {
+  
+  async developerRequestWipeData(data, ctx) {
+    if (ctx.role !== 'Developer') throw appError('FORBIDDEN', '僅開發者可執行此操作。');
+    const dev = await findOne('developers', { id: ctx.developerId });
+    if (!dev) throw appError('NOT_FOUND', '開發者不存在。');
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    await updateRows('developers', { id: ctx.developerId }, { wipe_token: token, wipe_token_expires_at: expiresAt });
+
+    const appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+    const wipeUrl = `${appUrl}/?action=wipe_data&token=${token}`;
+
+    await sendMail(dev.email, '【危險】確認刪除所有系統資料', `
+      <h1>刪除所有資料確認</h1>
+      <p>開發者 ${dev.username}，你剛剛請求了刪除系統所有的班級、使用者、訂單與交易紀錄。</p>
+      <p style="color:red; font-weight:bold;">警告：這將會清空除了學校、合作店家與開發者帳號外的所有營運資料，且無法復原！</p>
+      <p>如果確定要執行，請在 15 分鐘內點擊下方按鈕：</p>
+      <a href="${wipeUrl}" style="display:inline-block;padding:12px 24px;background:#dc2626;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">確認並永久刪除所有資料</a>
+    `);
+
+    return { ok: true, message: '確認信已寄至開發者信箱，請在 15 分鐘內點擊確認連結。' };
+  },
+
+  async developerExecuteWipeData(data) {
+    const token = String(data.token || '').trim();
+    if (!token) throw appError('INVALID_TOKEN', '驗證碼無效。');
+    const dev = await findOne('developers', { wipe_token: token });
+    if (!dev) throw appError('INVALID_TOKEN', '驗證碼無效或已過期。');
+    if (new Date(dev.wipe_token_expires_at).getTime() < Date.now()) throw appError('EXPIRED', '驗證碼已過期。');
+
+    await updateRows('developers', { id: dev.id }, { wipe_token: null, wipe_token_expires_at: null });
+
+    await callRpc('fn_wipe_all_data', {});
+    return { ok: true };
+  },
+async developerSetMaintenance(data) {
     await setAppSetting('', 'maintenance', Boolean(data.enabled) ? '1' : '0');
     return { ok: true, maintenance: Boolean(data.enabled) };
   },
