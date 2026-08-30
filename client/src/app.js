@@ -35,6 +35,7 @@ const state = {
   confirmAction: null,
   countdownTimer: null,
   closedSessionIds: new Set(),
+  autoRefreshTimer: null,
   push: { supported: false, subscribed: false }
 };
 
@@ -55,6 +56,7 @@ async function bootstrap() {
   state.publicConfig = await loadPublicConfig();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   window.addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); deferredInstallPrompt = event; renderInstallButton(); });
+  startAutoRefresh();
   const resetToken = new URLSearchParams(location.search).get('resetToken');
   if (resetToken) {
     state.token = '';
@@ -784,6 +786,26 @@ async function refreshOrders() {
   state.user = data.user;
   syncUser();
   renderShell();
+}
+
+// ----自動刷新：新增場次、儲值、訂單異動會自動同步，不需手動重新載入----
+const AUTO_REFRESH_SECONDS = 20;
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  state.autoRefreshTimer = setInterval(() => { autoRefreshTick(); }, AUTO_REFRESH_SECONDS * 1000);
+  window.addEventListener('focus', autoRefreshTick);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefreshTick(); });
+}
+
+function stopAutoRefresh() {
+  if (state.autoRefreshTimer) { clearInterval(state.autoRefreshTimer); state.autoRefreshTimer = null; }
+}
+
+async function autoRefreshTick() {
+  if (!state.token || !apiConfigured() || document.hidden || state.operationPending || state.confirmAction || state.scannerMode) return;
+  if (state.view === 'admin' && state.admin.scanResult) return;
+  try { await refreshOrders(); } catch (_) { /* 背景刷新失敗時靜默，下一次再試。 */ }
 }
 
 async function logout() {

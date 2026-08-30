@@ -58,7 +58,7 @@ export function publicOrder(order) {
 export function computeOrderItems(menuItems, selections) {
   if (!Array.isArray(selections) || !selections.length) throw new Error('請至少選擇一項餐點。');
   if (selections.length > 20) throw new Error('單次最多可選擇 20 項餐點。');
-  const byId = new Map(menuItems.map(item => [String(item.id), item]));
+  const byId = new Map(menuItems.map(item => [String(item.itemId ?? item.id), item]));
   const used = new Set();
   const items = selections.map(selection => {
     const itemId = String(selection?.itemId || '');
@@ -70,13 +70,13 @@ export function computeOrderItems(menuItems, selections) {
     used.add(itemId);
     const optionIds = Array.isArray(selection?.optionIds) ? selection.optionIds.map(String) : [];
     if (new Set(optionIds).size !== optionIds.length) throw new Error('客製選項不可重複選擇。');
-    const optionsById = new Map((item.options || []).map(option => [String(option.id), option]));
+    const optionsById = new Map((item.options || []).map(option => [String(option.optionId ?? option.id), option]));
     const selectedOptions = optionIds.map(optionId => {
       const option = optionsById.get(optionId);
       if (!option) throw new Error('客製選項資料不正確。');
-      return { optionId: sid(option.id), name: option.name };
+      return { optionId: sid(option.optionId ?? option.id), name: option.name, price: num(option.priceAdjustment ?? option.price) };
     });
-    const unitPrice = round2(num(item.price) + selectedOptions.reduce((sum, option) => sum + num((optionsById.get(String(option.optionId)) || {}).price), 0));
+    const unitPrice = round2(num(item.basePrice ?? item.price) + selectedOptions.reduce((sum, option) => sum + option.price, 0));
     if (unitPrice < 0) throw new Error('餐點金額不正確。');
     return {
       itemId,
