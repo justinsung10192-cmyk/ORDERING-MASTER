@@ -1,1 +1,0 @@
-修正管理員統計頁 NaN 錯誤：刪除使用者後訂單 user_id 為 null，原本 String(null)='null' 被 Number() 轉成 NaN 導致 bigint 查詢失敗（admin/merchant/cron 三處同步修正）
