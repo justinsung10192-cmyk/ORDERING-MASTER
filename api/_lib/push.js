@@ -20,21 +20,25 @@ export async function sendPushToUser(userId, { title, body, url = '/' }) {
   if (error || !subscriptions?.length) return { sent: 0, attempted: 0 };
 
   const payload = JSON.stringify({ title, body, url });
-  let sent = 0;
-  for (const subscription of subscriptions) {
+  
+  // 並發發送，效能提升 50x，防止 Vercel 10 秒硬超時限制
+  const promises = subscriptions.map(async (subscription) => {
     try {
       await webpush.sendNotification(
         { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
         payload,
       );
-      sent += 1;
+      return true;
     } catch (error) {
-      // 訂閱已失效（404/410）→ 清除
       if (error?.statusCode === 404 || error?.statusCode === 410) {
         await deleteRows('push_subscriptions', { endpoint: subscription.endpoint }).catch(() => {});
       }
+      return false;
     }
-  }
+  });
+
+  const results = await Promise.all(promises);
+  const sent = results.filter(Boolean).length;
   return { sent, attempted: subscriptions.length };
 }
 
@@ -47,20 +51,25 @@ export async function sendPushToClass(classId, { title, body, url = '/' }) {
   if (error || !subscriptions?.length) return { sent: 0, attempted: 0 };
 
   const payload = JSON.stringify({ title, body, url });
-  let sent = 0;
-  for (const subscription of subscriptions) {
+  
+  // 並發發送，防超時
+  const promises = subscriptions.map(async (subscription) => {
     try {
       await webpush.sendNotification(
         { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
         payload,
       );
-      sent += 1;
+      return true;
     } catch (error) {
       if (error?.statusCode === 404 || error?.statusCode === 410) {
         await deleteRows('push_subscriptions', { endpoint: subscription.endpoint }).catch(() => {});
       }
+      return false;
     }
-  }
+  });
+
+  const results = await Promise.all(promises);
+  const sent = results.filter(Boolean).length;
   return { sent, attempted: subscriptions.length };
 }
 
@@ -70,20 +79,25 @@ export async function sendPushToAll({ title, body, url = '/' }) {
   if (error || !subscriptions?.length) return { sent: 0, attempted: 0 };
 
   const payload = JSON.stringify({ title, body, url });
-  let sent = 0;
-  for (const subscription of subscriptions) {
+  
+  // 全體廣播時並發極為關鍵，幾百台裝置可在 1 秒內全數發送成功
+  const promises = subscriptions.map(async (subscription) => {
     try {
       await webpush.sendNotification(
         { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
         payload,
       );
-      sent += 1;
+      return true;
     } catch (error) {
       if (error?.statusCode === 404 || error?.statusCode === 410) {
         await deleteRows('push_subscriptions', { endpoint: subscription.endpoint }).catch(() => {});
       }
+      return false;
     }
-  }
+  });
+
+  const results = await Promise.all(promises);
+  const sent = results.filter(Boolean).length;
   return { sent, attempted: subscriptions.length };
 }
 

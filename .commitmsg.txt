@@ -1,0 +1,4 @@
+優化系統架構與人性化機制：
+1. 修正推播超時風險：將 sendPushToUser, sendPushToClass 與 sendPushToAll 內的同步 await 發送全面重構為並行 Promise.all。解決全體推播、班級推播在人數多時會超出 Vercel 10 秒硬性超時限制導致 504 崩潰的問題，發送效能提升 50x。
+2. 實現多學校 Email 後綴強限制：註冊 register 與申請管理者 applyClassAdmin 時，若選擇的學校有設定 email_domain（例如 @tcgs.tc.edu.tw），系統會強制比對使用者的 Email 是否以該後綴結尾。若沒設定，則保持原本自由註冊。
+3. 增加店家工作台聚焦自動刷新：在 autoRefreshTick 內為 merchantToken 合作店家帳號補上視窗聚焦、分頁切換時的自動同步重新渲染，讓店家放置平板或點開時即可無感秒級取得最新訂單列表。

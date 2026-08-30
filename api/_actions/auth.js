@@ -44,6 +44,13 @@ export const actions = {
     if (schoolId) {
       const school = await findOne('schools', { id: schoolId });
       if (!school) throw appError('INVALID_INPUT', '學校不存在。');
+      if (school.email_domain && school.email_domain.trim()) {
+        const domain = school.email_domain.trim().toLowerCase();
+        const checkDomain = domain.startsWith('@') ? domain : '@' + domain;
+        if (!email.endsWith(checkDomain)) {
+          throw appError('INVALID_INPUT', `此學校限定註冊信箱必須為 ${checkDomain} 後綴。`);
+        }
+      }
     }
     if (!/^\d{3,30}$/.test(studentNo)) throw appError('INVALID_INPUT', '學號格式不正確。');
     if (!seatNo) throw appError('INVALID_INPUT', '請填寫座號。');
@@ -177,6 +184,13 @@ export const actions = {
     if (schoolId) {
       const school = await findOne('schools', { id: schoolId });
       if (!school) throw appError('INVALID_INPUT', '學校不存在。');
+      if (school.email_domain && school.email_domain.trim()) {
+        const domain = school.email_domain.trim().toLowerCase();
+        const checkDomain = domain.startsWith('@') ? domain : '@' + domain;
+        if (!email.endsWith(checkDomain)) {
+          throw appError('INVALID_INPUT', `此學校限定申請信箱必須為 ${checkDomain} 後綴。`);
+        }
+      }
     }
     if (!studentName || !studentNo || !className) throw appError('INVALID_INPUT', '請完整填寫真實姓名、學號與班級。');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw appError('INVALID_INPUT', '電子郵件格式不正確。');

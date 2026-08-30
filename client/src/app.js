@@ -1091,6 +1091,21 @@ function stopLunchCountdown() {
 }
 
 async function autoRefreshTick() {
+  if (state.merchantToken) {
+    if (document.hidden || state.operationPending || state.confirmAction) return;
+    try {
+      const content = $('#merchant-content');
+      if (content) {
+        const activeBtn = document.querySelector('[data-tab].bg-ledger');
+        const tab = activeBtn ? activeBtn.dataset.tab : 'orders';
+        if (tab === 'orders') await renderMerchantDashboard(content);
+        else if (tab === 'menu') await renderMerchantMenu(content);
+        else if (tab === 'settings') await renderMerchantSettings(content);
+      }
+    } catch (_) {}
+    return;
+  }
+
   if (!state.token || !apiConfigured() || document.hidden || state.operationPending || state.confirmAction || state.scannerMode) return;
   if (state.view === 'admin' && (state.admin.scanResult || document.querySelector('#scanner-container'))) return;
   if (document.querySelector('#confirm-modal.active') || document.querySelector('#merchant-option-form') || state.editingOrderId) return;
