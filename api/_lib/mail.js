@@ -1,17 +1,41 @@
-// 郵件層：Resend（免費層 3000 封/月、100 封/日）——只用於驗證信與密碼重設信
-import { Resend } from 'resend';
+// 郵件層：Gmail SMTP（免費、免網域）——只用於驗證信與密碼重設信
+// 設定方式：
+//   1) Gmail「帳戶安全性」開啟兩步驟驗證
+//   2) 產生「應用程式密碼」(16 碼，僅限郵件)
+//   3) 填入環境變數 SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS（EMAIL_FROM 可選）
+import nodemailer from 'nodemailer';
 
-const apiKey = process.env.RESEND_API_KEY || '';
-const from = process.env.EMAIL_FROM || '班級訂午餐 <no-reply@example.com>';
-const appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+let transporter = null;
 
-const resend = apiKey ? new Resend(apiKey) : null;
+export function mailConfigured() {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
+function getTransporter() {
+  if (transporter) return transporter;
+  const port = Number(process.env.SMTP_PORT || 465);
+  transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port,
+    secure: port === 465,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+  return transporter;
+}
+
+function senderAddress() {
+  if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
+  return `訂餐通 <${process.env.SMTP_USER}>`;
+}
 
 export async function sendMail({ to, subject, html }) {
-  if (!resend) return { sent: false, message: '郵件服務尚未設定（缺少 RESEND_API_KEY）。' };
+  if (!mailConfigured()) return { sent: false, message: '郵件服務尚未設定（請設定 SMTP_USER / SMTP_PASS）。' };
   if (!to || !String(to).includes('@')) return { sent: false, message: '電子郵件地址不正確。' };
   try {
-    await resend.emails.send({ from, to, subject, html });
+    await getTransporter().sendMail({ from: senderAddress(), to, subject, html });
     return { sent: true, message: '已寄出。' };
   } catch (error) {
     return { sent: false, message: `郵件寄送失敗：${error.message || '請稍後再試。'}` };

@@ -3,6 +3,7 @@ import { appError, sid, num, round2, sha256Hex, todayString } from '../_lib/util
 import { supabase, findOne, listRows, listRowsIn, insertRow, updateRows, deleteRows, getAppSetting, setAppSetting } from '../_lib/db.js';
 import { bumpAuthVersion, createInviteCodeValue } from '../_lib/auth.js';
 import { outstandingOf, dashboardOrderRow } from '../_lib/serialize.js';
+import { mailConfigured } from '../_lib/mail.js';
 
 export const actions = {
   async getAdminDashboard(data, ctx) {
@@ -247,11 +248,13 @@ export const actions = {
   },
 
   async adminGetEmailDiagnostics() {
-    const hasResend = Boolean(process.env.RESEND_API_KEY);
+    const configured = mailConfigured();
     return {
-      message: hasResend ? '郵件服務正常（Resend，僅用於驗證信與重設信）。' : '郵件服務尚未設定 RESEND_API_KEY。',
-      gmailAuthorized: hasResend,
-      remainingDailyQuota: hasResend ? 100 : 0,
+      message: configured
+        ? `郵件服務正常（Gmail SMTP：${process.env.SMTP_USER}，僅用於驗證信與重設信）。`
+        : '郵件服務尚未設定（請設定 SMTP_USER / SMTP_PASS，並在 Gmail 產生應用程式密碼）。',
+      gmailAuthorized: configured,
+      remainingDailyQuota: configured ? 500 : 0,
     };
   },
 };

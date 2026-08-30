@@ -1,6 +1,6 @@
 # 建置步驟（約 30–40 分鐘，照順序做）
 
-> 目標：Vercel（前端＋API）＋ Supabase（資料庫）＋ Resend（Email）＋ Web Push（手機通知）。
+> 目標：Vercel（前端＋API）＋ Supabase（資料庫）＋ Gmail SMTP（Email）＋ Web Push（手機通知）。
 > 舊的 Google 試算表／Apps Script 不再需要；既有資料不保留，全新開始。
 
 ---
@@ -35,10 +35,13 @@ npm run generate:vapid
 | 變數 | 值 |
 | --- | --- |
 | `SUPABASE_URL` | 第 1 步的 Project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | 第 1 步的 service_role key |
+| `SUPABASE_SERVICE_ROLE_KEY` | 第 1 步的 service_role key（新版介面為 Secret key） |
 | `APP_URL` | 你的 Vercel 網址（如 `https://class-lunch.vercel.app`，不加斜線） |
-| `RESEND_API_KEY` | 第 4 步取得 |
-| `EMAIL_FROM` | 如 `班級訂午餐 <no-reply@你的網域>`（第 4 步驗證網域） |
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_USER` | 你的 Gmail 帳號（第 4 步） |
+| `SMTP_PASS` | Gmail 應用程式密碼 16 碼（第 4 步） |
+| `EMAIL_FROM` | 如 `訂餐通 <你的gmail@gmail.com>`（必須與 SMTP_USER 同一帳號） |
 | `VAPID_PUBLIC_KEY` | 第 2 步產生 |
 | `VAPID_PRIVATE_KEY` | 第 2 步產生 |
 | `CRON_SECRET` | 自訂一串隨機字元（排程保護用） |
@@ -46,12 +49,22 @@ npm run generate:vapid
 
 4. 按 **Deploy**，等建置完成。
 
-## 第 4 步：Email（Resend，只有驗證信／重設信）
+## 第 4 步：Email（Gmail SMTP，免費、免網域，只有驗證信／重設信）
 
-1. 到 https://resend.com 註冊（免費層：3000 封/月、100 封/日）
-2. **Domains** → 新增網域並照指示加 DNS 記錄（沒有自己的網域，可用免費的 `onboarding@resend.dev` 測試寄信，正式使用前建議綁定網域）
-3. 取得 `API Key`（`re_...`）填入 Vercel 的 `RESEND_API_KEY`
-4. `EMAIL_FROM` 的寄件地址要與驗證過的網域一致
+1. 用你的 Gmail 帳號：
+   - 到「Google 帳戶 → 安全性」開啟**兩步驟驗證**
+   - 搜尋「**應用程式密碼**」→ 新增（選「郵件」）→ 得到 16 碼密碼（記下來）
+2. 把以下值填入 Vercel 環境變數：
+
+| 變數 | 值 |
+| --- | --- |
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_USER` | 你的 Gmail 帳號 |
+| `SMTP_PASS` | 16 碼應用程式密碼（不含空格） |
+| `EMAIL_FROM` | `訂餐通 <你的gmail@gmail.com>`（必須是同一帳號） |
+
+3. 重新部署後，管理員可到「管理 → 系統設定」看郵件狀態是否正常。
 
 ## 第 5 步：啟用截止提醒排程（選用）
 
@@ -99,6 +112,6 @@ API_BASE=https://你的-app.vercel.app/api/gas node scripts/smoke-test.js
 ## 常見問題
 
 - **手機收不到通知？** ① 需用 Chrome／Edge 並允許通知權限；② iPhone 需 iOS 16.4+ 且加入主畫面；③ 檢查 VAPID 金鑰是否已設定；④ 通知只會送到「已開啟通知」的裝置。
-- **Email 寄不出去？** 檢查 Resend 網域驗證與 `EMAIL_FROM`；免費層每日 100 封上限。
+- **Email 寄不出去？** ① 確認 Gmail 已開「兩步驟驗證」並產生「應用程式密碼」（一般登入密碼不行）；② `SMTP_PASS` 為 16 碼、不含空格；③ `EMAIL_FROM` 必須是同一 Gmail 帳號；④ 管理員 →「系統設定」可看郵件狀態。Gmail SMTP 每日約 500 封上限（驗證信足夠）。
 - **資料庫會休眠？** Supabase 免費層閒置 7 天才休眠；學生天天使用不會觸發，喚醒只要幾秒。
 - **免費配額夠嗎？** 一個班級（50 人）每天數百次 API 呼叫，遠低於免費層上限。
