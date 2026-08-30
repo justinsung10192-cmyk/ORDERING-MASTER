@@ -1,4 +1,0 @@
-修正場次結束退訂與系統即時同步問題：
-1. 修正取消訂單漏洞：後端 deleteOwnOrder 與前端 orderCanBeChanged 補上 !session.is_open 判斷，確保提前結束的場次不允許學生退訂/修改。
-2. 升級自動刷新機制：將 focus/visibilitychange 自動同步由 renderShell 升級為靜默局部刷新 (refreshOrders(true))，大幅提升流暢度、解決重繪閃爍與失焦問題，並加入防干擾保護（正在下單、相機掃碼、彈窗中不刷新）。
-3. 修正管理端同步異常：將管理員確認取餐、標記已結清、掃碼/手動儲值、手動扣款、停用/刪除帳號、修改截止、提前結束、刪除場次、新增/刪除菜單等所有操作成功後，全面補上 await refreshOrders(true)，實現秒級全局即時同步。
